@@ -105,6 +105,13 @@ int main(int argc, char **argv) {
     fuse_argv[fuse_argc] = "-s"; // Single-threaded
     fuse_argc++;
 
+#ifdef __APPLE__
+    fuse_argv[fuse_argc] = "-o"; // Use macFUSE's FSKit backend
+    fuse_argc++;
+    fuse_argv[fuse_argc] = "backend=fskit";
+    fuse_argc++;
+#endif
+
     if (mount_flags & FAT_MOUNT_FLAG_READONLY) {
         DEBUG("Read only mode");
         fuse_argv[fuse_argc] = "-o";

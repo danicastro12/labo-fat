@@ -1,1 +1,11 @@
 /mnt
+fat-fuse
+fat_file.o
+fat_filename_util.o
+fat_fs_tree.o
+fat_fuse.o
+fat_fuse_ops.o
+fat_table.o
+fat_util.o
+fat_volume.o
+hierarchy_tree.o
