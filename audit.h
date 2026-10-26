@@ -1,6 +1,7 @@
 #ifndef AUDIT_H
 #define AUDIT_H
 
+#include "fat_types.h"
 #include <stdint.h>
 
 /* Operation types for audit logging */
@@ -65,5 +66,8 @@ typedef struct __attribute__((packed)) {
      * Adjust this value based on your structure size */
     uint8_t _padding[100];
 } audit_event_t;
+
+
+int fat_fuse_internal_mkdir(const char *path,fat_volume volume);
 
 #endif /* AUDIT_H */

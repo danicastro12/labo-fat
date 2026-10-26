@@ -4,9 +4,10 @@
  * main() for a program to mount a FAT filesystem using FUSE
  */
 
+#include "fat_fs_tree.h"
 #include "fat_fuse_ops.h"
 #include "fat_volume.h"
-
+#include "audit.h"
 #include <alloca.h>
 #include <errno.h>
 #include <getopt.h>
@@ -105,13 +106,6 @@ int main(int argc, char **argv) {
     fuse_argv[fuse_argc] = "-s"; // Single-threaded
     fuse_argc++;
 
-#ifdef __APPLE__
-    fuse_argv[fuse_argc] = "-o"; // Use macFUSE's FSKit backend
-    fuse_argc++;
-    fuse_argv[fuse_argc] = "backend=fskit";
-    fuse_argc++;
-#endif
-
     if (mount_flags & FAT_MOUNT_FLAG_READONLY) {
         DEBUG("Read only mode");
         fuse_argv[fuse_argc] = "-o";
@@ -140,6 +134,21 @@ int main(int argc, char **argv) {
     }
     // Initilize the internal FUSE state
     vol = fat_fuse_init(vol);
+  
+    bool exist = false;
+
+    exist = fat_tree_node_search(vol->file_tree, "/.audit");
+
+    if(!exist){
+      int res = fat_fuse_internal_mkdir("/.audit", vol);
+      if(res != 0){
+        ret = fat_volume_unmount(vol);
+        if (ret)
+          fat_error("failed to unmount FAT volume \"%s\": %m", volume);
+        return 1;
+      }
+    }
+
 
     // Call fuse_main() to pass control to FUSE.  This will daemonize the
     // process, causing it to detach from the terminal.  fat_volume_unmount()

@@ -275,7 +275,7 @@ static int map_fat(fat_volume vol, int fd, int mount_flags) {
     }
 
     DEBUG("Mapping FAT into memory (%zu bytes at offset %lld)", fat_size_bytes,
-          fat_offset);
+          (long long)fat_offset);
 
     prot = PROT_READ;
     if (mount_flags & FAT_MOUNT_FLAG_READWRITE) {

@@ -9,3 +9,8 @@ fat_table.o
 fat_util.o
 fat_volume.o
 hierarchy_tree.o
+compile_commands.json
+.DS_Store
+*.o
+create_empty_image
+file.img

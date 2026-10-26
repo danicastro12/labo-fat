@@ -1,0 +1,48 @@
+#include "fat_fs_tree.h"
+#include "fat_types.h"
+#include "fat_util.h"
+#include "fat_volume.h"
+#include <alloca.h>
+#include <errno.h>
+#include <gmodule.h>
+#include <libgen.h>
+#include <string.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+int fat_fuse_internal_mkdir(const char *path,fat_volume vol) {
+    errno = 0;
+    if(vol == NULL){
+      return -1; //TODO: CAMBIAR EL RETURN Y HACERLO MAS EXPLICITO
+    }
+    fat_file parent = NULL, new_file = NULL;
+    fat_tree_node parent_node = NULL;
+
+    // The system has already checked the path does not exist. We get the parent
+    parent_node = fat_tree_node_search(vol->file_tree, dirname(strdup(path)));
+    if (parent_node == NULL) {
+        errno = ENOENT;
+        return -errno;
+    }
+    parent = fat_tree_get_file(parent_node);
+    if (!fat_file_is_directory(parent)) {
+        fat_error("Error! Parent is not directory\n");
+        errno = ENOTDIR;
+        return -errno;
+    }
+
+    // init child
+    new_file = fat_file_init(vol->table, true, strdup(path));
+    if (errno != 0) {
+        return -errno;
+    }
+    // insert to directory tree representation
+    vol->file_tree = fat_tree_insert(vol->file_tree, parent_node, new_file);
+    printf("PRINT DESDE INTERNAL");
+    fat_tree_print_preorder(vol->file_tree);
+    // write file in parent's entry (disk)
+    new_file->pos_in_parent = parent->dir.nentries;
+    fat_file_add_child_direntry(parent, new_file->dentry, new_file->pos_in_parent);
+
+    return -errno;
+}
