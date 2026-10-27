@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #define AUDIT_DIR_PATH "/.audit"
-#define AUDIT_FILE_PATH AUDIT_DIR_PATH "events.bin"
+#define AUDIT_FILE_PATH AUDIT_DIR_PATH "/events.bin"
 
 /* Operation types for audit logging */
 typedef enum {
