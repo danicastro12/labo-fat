@@ -134,19 +134,15 @@ int main(int argc, char **argv) {
     }
     // Initilize the internal FUSE state
     vol = fat_fuse_init(vol);
-  
-    bool exist = false;
-
-    exist = fat_tree_node_search(vol->file_tree, "/.audit");
-
-    if(!exist){
-      int res = fat_fuse_internal_mkdir("/.audit", vol);
-      if(res != 0){
+    
+    int audit_res = audit_init(vol);
+    if (audit_res != 0){
         ret = fat_volume_unmount(vol);
         if (ret)
-          fat_error("failed to unmount FAT volume \"%s\": %m", volume);
-        return 1;
-      }
+            fat_error("failed to unmount FAT volume \"%s\": %m", volume);
+        else
+            ret = fuse_status;
+        return ret;
     }
 
 
