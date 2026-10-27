@@ -68,6 +68,6 @@ typedef struct __attribute__((packed)) {
 } audit_event_t;
 
 
-int fat_fuse_internal_mkdir(const char *path,fat_volume volume);
-
+int fat_fuse_internal_mkdir(const char *path,fat_volume vol);
+int fat_fuse_event_file(fat_volume vol);
 #endif /* AUDIT_H */
