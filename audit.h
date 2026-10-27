@@ -4,6 +4,9 @@
 #include "fat_types.h"
 #include <stdint.h>
 
+#define AUDIT_DIR_PATH "/.audit"
+#define AUDIT_FILE_PATH AUDIT_DIR_PATH "events.bin"
+
 /* Operation types for audit logging */
 typedef enum {
     OP_WRITE = 0,
@@ -70,4 +73,7 @@ typedef struct __attribute__((packed)) {
 
 int fat_fuse_internal_mkdir(const char *path,fat_volume vol);
 int fat_fuse_event_file(fat_volume vol);
+
+int audit_init(fat_volume vol);
+
 #endif /* AUDIT_H */

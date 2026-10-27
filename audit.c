@@ -1,4 +1,5 @@
 #include "fat_file.h"
+#include "audit.h"
 #include "fat_fs_tree.h"
 #include "fat_types.h"
 #include "fat_util.h"
@@ -11,10 +12,11 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+
 int fat_fuse_internal_mkdir(const char *path,fat_volume vol) {
     errno = 0;
     if(vol == NULL){
-      return -1; //TODO: CAMBIAR EL RETURN Y HACERLO MAS EXPLICITO
+      return -EINVAL;
     }
     fat_file parent = NULL, new_file = NULL;
     fat_tree_node parent_node = NULL;
@@ -53,7 +55,7 @@ int fat_fuse_event_file(fat_volume vol){
   fat_file parent =NULL, new_file = NULL; 
   fat_tree_node parent_node = NULL;
 
-  parent_node = fat_tree_node_search(vol->file_tree, "/.audit");
+  parent_node = fat_tree_node_search(vol->file_tree, AUDIT_DIR_PATH);
 
   //Chequeo si existe la carpeta padre /.audit
   if(parent_node == NULL){
@@ -66,7 +68,7 @@ int fat_fuse_event_file(fat_volume vol){
     return -1;
   }
 
-  new_file = fat_file_init(vol->table,false, strdup("/.audit/events.bin"));
+  new_file = fat_file_init(vol->table,false, strdup(AUDIT_FILE_PATH));
   if (errno != 0) {
     return -errno;
   }
@@ -77,3 +79,34 @@ int fat_fuse_event_file(fat_volume vol){
  
   return -errno;
 }
+
+int audit_init(fat_volume vol){
+    errno = 0;
+    if (vol == NULL){
+        return -EINVAL;
+    }
+    if (vol->mount_flags & FAT_MOUNT_FLAG_READONLY){
+        return errno; //return sin hacer nada, no tiene permissos de escritura
+    }
+    
+    bool exist_dir = false;
+    bool exist_file = false;
+    exist_dir = fat_tree_node_search(vol->file_tree, AUDIT_DIR_PATH);
+
+    if(!exist_dir){
+      int res_dir = fat_fuse_internal_mkdir(AUDIT_DIR_PATH, vol);
+      if(res_dir != 0){
+        return res_dir;
+      }
+    }
+
+    exist_file = fat_tree_node_search(vol->file_tree, AUDIT_FILE_PATH);
+    if(!exist_file){
+      int res_file = fat_fuse_event_file(vol);
+      if(res_file != 0){
+        return res_file;
+      }
+    }
+    return 0;
+}
+
