@@ -29,7 +29,7 @@
  * This operation should be performed only once per directory, the first time
  * readdir is called.
  */
-static void fat_fuse_load_directory_children(fat_volume vol,
+void fat_fuse_load_directory_children(fat_volume vol,
                                              fat_tree_node dir_node) {
     fat_file dir = fat_tree_get_file(dir_node);
     GList *children_list = fat_file_read_children(dir);
