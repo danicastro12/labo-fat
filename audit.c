@@ -4,6 +4,7 @@
 #include "fat_types.h"
 #include "fat_util.h"
 #include "fat_volume.h"
+#include "fat_fuse_ops.h"
 #include <alloca.h>
 #include <errno.h>
 #include <gmodule.h>
@@ -89,14 +90,21 @@ int audit_init(fat_volume vol){
         return errno; //return sin hacer nada, no tiene permissos de escritura
     }
     
-    bool exist_dir = false;
+    //bool exist_dir = false;
     bool exist_file = false;
-    exist_dir = fat_tree_node_search(vol->file_tree, AUDIT_DIR_PATH);
+    fat_tree_node audit_node = fat_tree_node_search(vol->file_tree, AUDIT_DIR_PATH);
 
-    if(!exist_dir){
+    if(audit_node == NULL){
       int res_dir = fat_fuse_internal_mkdir(AUDIT_DIR_PATH, vol);
       if(res_dir != 0){
         return res_dir;
+      }
+      audit_node = fat_tree_node_search(vol->file_tree, AUDIT_DIR_PATH);
+    }
+    else {
+      fat_file audit_dir = fat_tree_get_file(audit_node);
+      if (audit_dir->children_read != 1) {
+          fat_fuse_load_directory_children(vol, audit_node);
       }
     }
 

@@ -29,4 +29,7 @@ int fat_fuse_rename(const char *oldpath, const char *newpath);
 int fat_fuse_ioctl(const char *path, int cmd, void *arg,
                    struct fuse_file_info *fi, unsigned int flags, void *data);
 
+void fat_fuse_load_directory_children(fat_volume vol,
+                                             fat_tree_node dir_node);
+ 
 #endif /* _FAT_FS_OPS_H */
