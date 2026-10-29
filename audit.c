@@ -118,3 +118,11 @@ int audit_init(fat_volume vol){
     return 0;
 }
 
+
+void audit_log_write(){
+    audit_event_t event;
+
+    event->event_id = TODO;
+    event->timestamp = TODO;
+    event->operation_type = OP_WRITE;
+}

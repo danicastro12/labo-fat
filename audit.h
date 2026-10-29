@@ -76,4 +76,5 @@ int fat_fuse_event_file(fat_volume vol);
 
 int audit_init(fat_volume vol);
 
+void audit_log_write();
 #endif /* AUDIT_H */

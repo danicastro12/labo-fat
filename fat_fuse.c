@@ -147,7 +147,10 @@ int main(int argc, char **argv) {
             fat_error("failed to unmount FAT volume \"%s\": %m", volume);
         return ret;
     }
+    audit_event_t aev;
+    printf("el tamaño fijo de la estructura audit es: %lu bytes\n", sizeof(aev));
 
+    
     // Call fuse_main() to pass control to FUSE.  This will daemonize the
     // process, causing it to detach from the terminal.  fat_volume_unmount()
     // will not be called until the filesystem is unmounted and fuse_main()
