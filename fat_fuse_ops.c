@@ -6,6 +6,7 @@
 
 #include "fat_fuse_ops.h"
 
+#include "audit.h"
 #include "fat_file.h"
 #include "fat_filename_util.h"
 #include "fat_fs_tree.h"
@@ -278,8 +279,12 @@ int fat_fuse_write(const char *path, const char *buf, size_t size, off_t offset,
         return 0; // Nothing to write
     if (offset > file->dentry->file_size)
         return -EOVERFLOW;
+    if (strcmp(path, AUDIT_FILE_PATH) == 0)
+        return -EPERM; //proteccion para no escribir en event.bin
 
     int result = fat_file_pwrite(file, buf, size, offset, parent);
+    if (result > 0)
+        audit_log_write(path, file, size, offset);
 
     return result;
 }

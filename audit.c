@@ -9,10 +9,15 @@
 #include <errno.h>
 #include <gmodule.h>
 #include <libgen.h>
+#include <stdint.h>
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <time.h>
 
+
+static uint64_t total_events;
+static fat_tree_node audit_event_node;
 
 int fat_fuse_internal_mkdir(const char *path,fat_volume vol) {
     errno = 0;
@@ -91,38 +96,63 @@ int audit_init(fat_volume vol){
     }
     
     //bool exist_dir = false;
-    bool exist_file = false;
-    fat_tree_node audit_node = fat_tree_node_search(vol->file_tree, AUDIT_DIR_PATH);
+    //bool exist_file = false;
+    fat_tree_node audit_dir_node = fat_tree_node_search(vol->file_tree, AUDIT_DIR_PATH);
 
-    if(audit_node == NULL){
+    if(audit_dir_node == NULL){
       int res_dir = fat_fuse_internal_mkdir(AUDIT_DIR_PATH, vol);
       if(res_dir != 0){
         return res_dir;
       }
-      audit_node = fat_tree_node_search(vol->file_tree, AUDIT_DIR_PATH);
+      audit_dir_node = fat_tree_node_search(vol->file_tree, AUDIT_DIR_PATH);
     }
     else {
-      fat_file audit_dir = fat_tree_get_file(audit_node);
-      if (audit_dir->children_read != 1) {
-          fat_fuse_load_directory_children(vol, audit_node);
+      fat_file audit_dir_file = fat_tree_get_file(audit_dir_node);
+      if (audit_dir_file->children_read != 1) {
+          fat_fuse_load_directory_children(vol, audit_dir_node);
       }
     }
 
-    exist_file = fat_tree_node_search(vol->file_tree, AUDIT_FILE_PATH);
-    if(!exist_file){
+    audit_event_node = fat_tree_node_search(vol->file_tree, AUDIT_FILE_PATH);
+    if(audit_event_node == NULL){
       int res_file = fat_fuse_event_file(vol);
       if(res_file != 0){
         return res_file;
       }
+      audit_event_node = fat_tree_node_search(vol->file_tree, AUDIT_FILE_PATH);
     }
+
+    //calculo de la cantidad de eventos en events.bin
+    fat_file event_file = fat_tree_get_file(audit_event_node);
+    total_events = event_file->dentry->file_size / sizeof(audit_event_t);
+
     return 0;
 }
 
-
-void audit_log_write(){
+void audit_log_write(const char *path, fat_file file, size_t size, off_t offset){
+    if (audit_event_node == NULL) //checkeo si es read_only
+        return;
     audit_event_t event;
 
-    event->event_id = TODO;
-    event->timestamp = TODO;
-    event->operation_type = OP_WRITE;
+    memset(&event, 0, sizeof(event));
+
+    fat_file event_file = fat_tree_get_file(audit_event_node);
+    fat_file parent = fat_tree_get_parent(audit_event_node);
+    off_t event_off = event_file->dentry->file_size;
+    size_t event_size = sizeof(event);
+
+    event.event_id = total_events;
+    event.timestamp = time(NULL);
+    event.operation_type = OP_WRITE;
+    strncpy(event.username,"NaN", sizeof(event.username) - 1);
+    strncpy(event.filepath, path, sizeof(event.filepath) - 1);
+    event.data.write_data.offset = offset; //ver si hace falta casteo
+    event.data.write_data.size = size;
+    //event.data.write_data.clusters_used[MAX_WRITE_CLUSTERS]; //ver como saber el cluster
+    //event.data.write_data.num_clusters;
+
+    int result = fat_file_pwrite(event_file, &event, event_size, event_off, parent);
+    if (result == sizeof(event))
+        total_events++;
+
 }
