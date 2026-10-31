@@ -84,4 +84,8 @@ void audit_log_write(const char *path, fat_file file, size_t size, off_t offset)
 
 void audit_log_unlink(const char *path, fat_file file);
 
+void audit_log_mkdir(const char *path, fat_file file);
+
+void audit_log_rmdir(const char *path, fat_file file);
+
 #endif /* AUDIT_H */

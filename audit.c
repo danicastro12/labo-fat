@@ -192,7 +192,7 @@ void audit_log_unlink(const char *path, fat_file file){
     //logica para la cluster_chain
     u32 cur_cluster = file->start_cluster;
     size_t i = 0;
-    while(cur_cluster != 0 && fat_table_cluster_is_EOC(cur_cluster) && i < MAX_UNLINK_CLUSTERS){
+    while(cur_cluster != 0 && !fat_table_cluster_is_EOC(cur_cluster) && i < MAX_UNLINK_CLUSTERS){
         event.data.unlink_data.cluster_chain[i] = cur_cluster;
         cur_cluster = fat_table_read_cluster_value(file->table, cur_cluster);
         i++;
@@ -203,3 +203,50 @@ void audit_log_unlink(const char *path, fat_file file){
         total_events++;
 }
 
+void audit_log_mkdir(const char *path, fat_file file){
+    if (audit_event_node == NULL) //checkeo si es read_only
+        return;
+    audit_event_t event;
+
+    memset(&event, 0, sizeof(event)); //para evitar tener basura, ver si va a ser problema o no
+
+    fat_file event_file = fat_tree_get_file(audit_event_node);
+    fat_file parent = fat_tree_get_parent(audit_event_node);
+    off_t event_off = event_file->dentry->file_size;
+    size_t event_size = sizeof(event);
+
+    event.event_id = total_events;
+    event.timestamp = time(NULL);
+    event.operation_type = OP_MKDIR;
+    strncpy(event.username,"NaN", sizeof(event.username) - 1);
+    strncpy(event.filepath, path, sizeof(event.filepath) - 1);
+    event.data.dir_data.dir_cluster = file->start_cluster;
+
+    int result = fat_file_pwrite(event_file, &event, event_size, event_off, parent);
+    if (result == sizeof(event))
+        total_events++;
+}
+
+void audit_log_rmdir(const char *path, fat_file file){
+    if (audit_event_node == NULL) //checkeo si es read_only
+        return;
+    audit_event_t event;
+
+    memset(&event, 0, sizeof(event)); //para evitar tener basura, ver si va a ser problema o no
+
+    fat_file event_file = fat_tree_get_file(audit_event_node);
+    fat_file parent = fat_tree_get_parent(audit_event_node);
+    off_t event_off = event_file->dentry->file_size;
+    size_t event_size = sizeof(event);
+
+    event.event_id = total_events;
+    event.timestamp = time(NULL);
+    event.operation_type = OP_RMDIR;
+    strncpy(event.username,"NaN", sizeof(event.username) - 1);
+    strncpy(event.filepath, path, sizeof(event.filepath) - 1);
+    event.data.dir_data.dir_cluster = file->start_cluster;
+
+    int result = fat_file_pwrite(event_file, &event, event_size, event_off, parent);
+    if (result == sizeof(event))
+        total_events++;
+}
