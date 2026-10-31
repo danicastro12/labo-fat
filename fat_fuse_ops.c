@@ -423,6 +423,8 @@ int fat_fuse_unlink(const char *path) {
         return -EISDIR;
     parent = fat_tree_get_parent(file_node);
 
+    //hago el log antes de perder las referencias
+    audit_log_unlink(path, file);
     // Set clusters free and remove entry from dir
     fat_file_unlink(file, parent);
 
