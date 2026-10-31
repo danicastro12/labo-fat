@@ -75,8 +75,13 @@ typedef struct __attribute__((packed)) {
 int fat_fuse_internal_mkdir(const char *path,fat_volume vol); //no deveriamos dejarlas privadas?
 int fat_fuse_event_file(fat_volume vol);
 
+/*
+ * @brief creates dir and file for audit
+ */
 int audit_init(fat_volume vol);
 
 void audit_log_write(const char *path, fat_file file, size_t size, off_t offset);
+
+void audit_log_unlink(const char *path, fat_file file);
 
 #endif /* AUDIT_H */
