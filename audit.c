@@ -5,6 +5,7 @@
 #include "fat_util.h"
 #include "fat_volume.h"
 #include "fat_fuse_ops.h"
+#include "fat_table.h"
 #include <alloca.h>
 #include <errno.h>
 #include <gmodule.h>
@@ -47,7 +48,7 @@ int fat_fuse_internal_mkdir(const char *path,fat_volume vol) {
     }
     // insert to directory tree representation
     vol->file_tree = fat_tree_insert(vol->file_tree, parent_node, new_file);
-    printf("PRINT DESDE INTERNAL");
+    //printf("PRINT DESDE INTERNAL");
     fat_tree_print_preorder(vol->file_tree);
     // write file in parent's entry (disk)
     new_file->pos_in_parent = parent->dir.nentries;
@@ -94,7 +95,7 @@ int audit_init(fat_volume vol){
     if (vol->mount_flags & FAT_MOUNT_FLAG_READONLY){
         return errno; //return sin hacer nada, no tiene permissos de escritura
     }
-    
+
     //bool exist_dir = false;
     //bool exist_file = false;
     fat_tree_node audit_dir_node = fat_tree_node_search(vol->file_tree, AUDIT_DIR_PATH);
@@ -134,7 +135,7 @@ void audit_log_write(const char *path, fat_file file, size_t size, off_t offset)
         return;
     audit_event_t event;
 
-    memset(&event, 0, sizeof(event));
+    memset(&event, 0, sizeof(event)); //para evitar tener basura, ver si va a ser problema o no
 
     fat_file event_file = fat_tree_get_file(audit_event_node);
     fat_file parent = fat_tree_get_parent(audit_event_node);
@@ -148,11 +149,23 @@ void audit_log_write(const char *path, fat_file file, size_t size, off_t offset)
     strncpy(event.filepath, path, sizeof(event.filepath) - 1);
     event.data.write_data.offset = offset; //ver si hace falta casteo
     event.data.write_data.size = size;
-    //event.data.write_data.clusters_used[MAX_WRITE_CLUSTERS]; //ver como saber el cluster
-    //event.data.write_data.num_clusters;
+    //logica para los clusters
+    size_t userfile_bpc = fat_table_bytes_per_cluster(file->table);
+    size_t first = offset / userfile_bpc;
+    size_t last = (offset + size - 1) / userfile_bpc;
+    size_t qtd = last - first + 1;
+
+    u32 cur_cluster = fat_table_seek_cluster(file->table, file->start_cluster, offset);
+    size_t i;
+    for(i = 0; i < qtd; i++){
+        event.data.write_data.clusters_used[i] = cur_cluster;
+        cur_cluster = fat_table_read_cluster_value(file->table, cur_cluster);
+        if (fat_table_cluster_is_EOC(cur_cluster))
+            break;
+    }
+    event.data.write_data.num_clusters = i;
 
     int result = fat_file_pwrite(event_file, &event, event_size, event_off, parent);
     if (result == sizeof(event))
         total_events++;
-
 }

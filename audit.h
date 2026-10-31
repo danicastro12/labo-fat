@@ -3,6 +3,7 @@
 
 #include "fat_types.h"
 #include <stdint.h>
+#include <sys/types.h>
 
 #define AUDIT_DIR_PATH "/.audit"
 #define AUDIT_FILE_PATH AUDIT_DIR_PATH "/events.bin"
