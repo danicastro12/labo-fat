@@ -283,6 +283,8 @@ int fat_fuse_write(const char *path, const char *buf, size_t size, off_t offset,
         return -EPERM; //proteccion para no escribir en event.bin
 
     int result = fat_file_pwrite(file, buf, size, offset, parent);
+
+    //log
     if (result > 0)
         audit_log_write(path, file, size, offset);
 
@@ -333,6 +335,11 @@ int fat_fuse_mkdir(const char *path, mode_t mode) {
     // write file in parent's entry (disk)
     new_file->pos_in_parent = parent->dir.nentries;
     fat_file_add_child_direntry(parent, new_file->dentry, new_file->pos_in_parent);
+
+    //log
+    int errno_restore = errno;  //ver una forma mas bonita de hacer eso
+    audit_log_mkdir(path, new_file);
+    errno = errno_restore;
 
     return -errno;
 }
@@ -448,6 +455,11 @@ int fat_fuse_rmdir(const char *path) {
     if (!fat_file_is_directory(file))
         return -ENOTDIR;
     parent = fat_tree_get_parent(file_node);
+
+    //log, antes de perder la referencia
+    int errno_restore = errno;  //ver una forma mas bonita de hacer eso
+    audit_log_rmdir(path, file);
+    errno = errno_restore;
 
     // Set clusters free and remove entry from dir
     fat_file_unlink(file, parent);
