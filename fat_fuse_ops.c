@@ -279,7 +279,7 @@ int fat_fuse_write(const char *path, const char *buf, size_t size, off_t offset,
         return 0; // Nothing to write
     if (offset > file->dentry->file_size)
         return -EOVERFLOW;
-    if (strcmp(path, AUDIT_FILE_PATH) == 0)
+    if (audit_is_protected_path(path))
         return -EPERM; //proteccion para no escribir en event.bin
 
     int result = fat_file_pwrite(file, buf, size, offset, parent);
@@ -338,7 +338,8 @@ int fat_fuse_mkdir(const char *path, mode_t mode) {
 
     //log
     int errno_restore = errno;  //ver una forma mas bonita de hacer eso
-    audit_log_mkdir(path, new_file);
+    if(errno_restore == 0)
+        audit_log_mkdir(path, new_file);
     errno = errno_restore;
 
     return -errno;
@@ -397,6 +398,9 @@ int fat_fuse_utime(const char *path, struct utimbuf *buf) {
 /* Shortens the file at the given offset.*/
 int fat_fuse_truncate(const char *path, off_t offset) {
     errno = 0;
+    //proteccion para no deletar .audit o events.bin
+    if(audit_is_protected_path(path))
+        return -EPERM;
     fat_volume vol = get_fat_volume();
     fat_file file = NULL, parent = NULL;
     fat_tree_node file_node = fat_tree_node_search(vol->file_tree, path);
@@ -417,6 +421,10 @@ int fat_fuse_truncate(const char *path, off_t offset) {
 /* Removes a file. */
 int fat_fuse_unlink(const char *path) {
     errno = 0;
+    //proteccion para no deletar .audit o events.bin
+    if(audit_is_protected_path(path))
+        return -EPERM;
+
     fat_volume vol = get_fat_volume();
     fat_file file = NULL, parent = NULL;
     // Search file in tree to get parent.
@@ -431,7 +439,10 @@ int fat_fuse_unlink(const char *path) {
     parent = fat_tree_get_parent(file_node);
 
     //hago el log antes de perder las referencias
+    int errno_restore = errno;
     audit_log_unlink(path, file);
+    errno = errno_restore;
+
     // Set clusters free and remove entry from dir
     fat_file_unlink(file, parent);
 
@@ -443,6 +454,9 @@ int fat_fuse_unlink(const char *path) {
 /* Removes a directory. */
 int fat_fuse_rmdir(const char *path) {
     errno = 0;
+    //proteccion para no deletar .audit o events.bin
+    if(audit_is_protected_path(path))
+        return -EPERM;
     fat_volume vol = get_fat_volume();
     fat_file file = NULL, parent = NULL;
     // Search file in tree to get parent.
@@ -472,6 +486,9 @@ int fat_fuse_rmdir(const char *path) {
 /* Renames/moves a file or directory from @oldpath to @newpath. */
 int fat_fuse_rename(const char *oldpath, const char *newpath) {
     errno = 0;
+    //proteccion para no deletar .audit o events.bin
+    if(audit_is_protected_path(oldpath) || audit_is_protected_path(newpath))
+        return -EPERM;
     fat_volume vol = get_fat_volume();
     fat_file file = NULL;
     fat_file old_parent_file = NULL, new_parent_file = NULL;

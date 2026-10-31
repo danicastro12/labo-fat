@@ -4,6 +4,7 @@
 #include "fat_types.h"
 #include <stdint.h>
 #include <sys/types.h>
+#include <stdbool.h>
 
 #define AUDIT_DIR_PATH "/.audit"
 #define AUDIT_FILE_PATH AUDIT_DIR_PATH "/events.bin"
@@ -74,6 +75,8 @@ typedef struct __attribute__((packed)) {
 
 int fat_fuse_internal_mkdir(const char *path,fat_volume vol); //no deveriamos dejarlas privadas?
 int fat_fuse_event_file(fat_volume vol);
+
+bool audit_is_protected_path(const char *path);
 
 /*
  * @brief creates dir and file for audit

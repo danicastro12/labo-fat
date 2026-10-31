@@ -87,6 +87,12 @@ int fat_fuse_event_file(fat_volume vol){
   return -errno;
 }
 
+bool audit_is_protected_path(const char *path){
+    return strcmp(AUDIT_DIR_PATH, path) == 0 || 
+           strcmp(AUDIT_FILE_PATH, path) == 0;
+}
+
+
 int audit_init(fat_volume vol){
     errno = 0;
     if (vol == NULL){
@@ -154,14 +160,14 @@ void audit_log_write(const char *path, fat_file file, size_t size, off_t offset)
     size_t first = offset / userfile_bpc;
     size_t last = (offset + size - 1) / userfile_bpc;
     size_t qtd = last - first + 1;
+    if(qtd > MAX_WRITE_CLUSTERS) qtd = MAX_WRITE_CLUSTERS;
 
     u32 cur_cluster = fat_table_seek_cluster(file->table, file->start_cluster, offset);
-    size_t i;
-    for(i = 0; i < qtd; i++){
+    size_t i = 0;
+    while(i < qtd && !fat_table_cluster_is_EOC(cur_cluster)){
         event.data.write_data.clusters_used[i] = cur_cluster;
         cur_cluster = fat_table_read_cluster_value(file->table, cur_cluster);
-        if (fat_table_cluster_is_EOC(cur_cluster))
-            break;
+        i++;
     }
     event.data.write_data.num_clusters = i;
 
