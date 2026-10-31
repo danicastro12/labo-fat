@@ -91,4 +91,6 @@ void audit_log_mkdir(const char *path, fat_file file);
 
 void audit_log_rmdir(const char *path, fat_file file);
 
+void audit_log_mknod(const char *path, fat_file file);
+
 #endif /* AUDIT_H */

@@ -374,6 +374,12 @@ int fat_fuse_mknod(const char *path, mode_t mode, dev_t dev) {
     // Write dentry in parent cluster
     new_file->pos_in_parent = parent->dir.nentries;
     fat_file_add_child_direntry(parent, new_file->dentry, new_file->pos_in_parent);
+
+    //log
+    int errno_restore = errno;  //ver una forma mas bonita de hacer eso
+    if(errno_restore == 0)
+        audit_log_mknod(path, new_file);
+    errno = errno_restore;
     return -errno;
 }
 
