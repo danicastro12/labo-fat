@@ -11,6 +11,7 @@
 #include <gmodule.h>
 #include <libgen.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -163,7 +164,7 @@ void audit_log_write(const char *path, fat_file file, size_t size, off_t offset)
         if (fat_table_cluster_is_EOC(cur_cluster))
             break;
     }
-    event.data.write_data.num_clusters = i;
+    event.data.write_data.num_clusters = i+1;
 
     int result = fat_file_pwrite(event_file, &event, event_size, event_off, parent);
     if (result == sizeof(event))
