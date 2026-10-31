@@ -3,6 +3,7 @@
 
 #include "fat_types.h"
 #include <stdint.h>
+#include <sys/types.h>
 
 #define AUDIT_DIR_PATH "/.audit"
 #define AUDIT_FILE_PATH AUDIT_DIR_PATH "/events.bin"
@@ -71,9 +72,11 @@ typedef struct __attribute__((packed)) {
 } audit_event_t;
 
 
-int fat_fuse_internal_mkdir(const char *path,fat_volume vol);
+int fat_fuse_internal_mkdir(const char *path,fat_volume vol); //no deveriamos dejarlas privadas?
 int fat_fuse_event_file(fat_volume vol);
 
 int audit_init(fat_volume vol);
+
+void audit_log_write(const char *path, fat_file file, size_t size, off_t offset);
 
 #endif /* AUDIT_H */

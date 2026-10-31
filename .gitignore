@@ -1,4 +1,7 @@
+#carpeta de montaje
 /mnt
+
+#generados con el make
 fat-fuse
 fat_file.o
 fat_filename_util.o
@@ -9,8 +12,16 @@ fat_table.o
 fat_util.o
 fat_volume.o
 hierarchy_tree.o
+
+#configs y pruebas
 compile_commands.json
 .DS_Store
-*.o
 create_empty_image
 file.img
+
+#./tools make audit_reader
+tools/audit_reader
+tools/audit_reader.dSYM/
+
+#objetcs
+*.o
