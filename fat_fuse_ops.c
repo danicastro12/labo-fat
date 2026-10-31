@@ -333,7 +333,7 @@ int fat_fuse_mkdir(const char *path, mode_t mode) {
     // write file in parent's entry (disk)
     new_file->pos_in_parent = parent->dir.nentries;
     fat_file_add_child_direntry(parent, new_file->dentry, new_file->pos_in_parent);
-
+    audit_log_dir(path,OP_MKDIR,new_file);
     return -errno;
 }
 
@@ -449,6 +449,8 @@ int fat_fuse_rmdir(const char *path) {
         return -ENOTDIR;
     parent = fat_tree_get_parent(file_node);
 
+    //loggeo aca porque en la proxima funcion se le asinga otro valor al start_cluster
+    audit_log_dir(path,OP_RMDIR,file);
     // Set clusters free and remove entry from dir
     fat_file_unlink(file, parent);
 

@@ -131,6 +131,29 @@ int audit_init(fat_volume vol){
     return 0;
 }
 
+static void event_init(audit_event_t *event, operation_type_t op_type,const char* path){
+  if(event == NULL){
+    return;
+  }
+  memset(event, 0, sizeof(*event)); //para evitar tener basura, ver si va a ser problema o no
+  event->event_id = total_events;
+  event->timestamp = time(NULL);
+  event->operation_type = op_type;
+  strncpy(event->username,"NaN", sizeof(event->username) - 1);
+  strncpy(event->filepath, path, sizeof(event->filepath) - 1);
+}
+
+static void event_write(audit_event_t *event){
+  fat_file event_file = fat_tree_get_file(audit_event_node);
+  fat_file parent = fat_tree_get_parent(audit_event_node);
+  off_t event_off = event_file->dentry->file_size;
+  size_t event_size = sizeof(*event);
+
+  int result = fat_file_pwrite(event_file, event, event_size, event_off, parent);
+  if (result == sizeof(*event))
+      total_events++;
+}
+
 void audit_log_write(const char *path, fat_file file, size_t size, off_t offset){
     if (audit_event_node == NULL) //checkeo si es read_only
         return;
@@ -203,3 +226,12 @@ void audit_log_unlink(const char *path, fat_file file){
         total_events++;
 }
 
+void audit_log_dir(const char* path,operation_type_t op_type, fat_file dir_file){
+  audit_event_t event;
+  event_init(&event, op_type, path);
+
+  event.data.dir_data.dir_cluster = dir_file->start_cluster;
+
+  event_write(&event);
+
+}
