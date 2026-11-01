@@ -334,12 +334,11 @@ int fat_fuse_mkdir(const char *path, mode_t mode) {
     vol->file_tree = fat_tree_insert(vol->file_tree, parent_node, new_file);
     // write file in parent's entry (disk)
     new_file->pos_in_parent = parent->dir.nentries;
-    fat_file_add_child_direntry(parent, new_file->dentry, new_file->pos_in_parent);
 
     //log
     int errno_restore = errno;  //ver una forma mas bonita de hacer eso
     if(errno_restore == 0)
-        audit_log_mkdir(path, new_file);
+      audit_log_dir(path,OP_MKDIR,new_file);
     errno = errno_restore;
 
     return -errno;
@@ -476,9 +475,11 @@ int fat_fuse_rmdir(const char *path) {
         return -ENOTDIR;
     parent = fat_tree_get_parent(file_node);
 
-    //log, antes de perder la referencia
     int errno_restore = errno;  //ver una forma mas bonita de hacer eso
-    audit_log_rmdir(path, file);
+    //loggeo aca porque en la proxima funcion se le asinga otro valor al start_cluster
+    if(errno_restore == 0){
+      audit_log_dir(path,OP_RMDIR,file);
+    }
     errno = errno_restore;
 
     // Set clusters free and remove entry from dir
