@@ -479,6 +479,7 @@ int fat_fuse_rmdir(const char *path) {
     //loggeo aca porque en la proxima funcion se le asinga otro valor al start_cluster
     if(errno_restore == 0){
       audit_log_dir(path,OP_RMDIR,file);
+      audit_log_unlink(path,file);
     }
     errno = errno_restore;
 
