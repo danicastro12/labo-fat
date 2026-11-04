@@ -40,22 +40,22 @@ struct stat;
 
 /* Format of a FAT directory entry on disk (32 bytes) */
 struct fat_dir_entry_s {
-    u8 base_name[8];
-    u8 extension[3];
-    u8 attribs;
-    u8 reserved;
-    u8 create_time_fine_res;
-    le16 create_time;      // BEWARE: little endian number
-    le16 create_date;      // BEWARE: little endian number
-    le16 last_access_date; // BEWARE: little endian number
-    union {
-        le16 file_access_bitmap; // Old formats
-        le16 fat32_start_cluster_high;
-    };
-    le16 last_modified_time; // BEWARE: little endian number
-    le16 last_modified_date; // BEWARE: little endian number
-    le16 start_cluster_low;  // only last two bytes
-    le32 file_size;
+  u8 base_name[8];
+  u8 extension[3];
+  u8 attribs;
+  u8 reserved;
+  u8 create_time_fine_res;
+  le16 create_time;      // BEWARE: little endian number
+  le16 create_date;      // BEWARE: little endian number
+  le16 last_access_date; // BEWARE: little endian number
+  union {
+    le16 file_access_bitmap; // Old formats
+    le16 fat32_start_cluster_high;
+  };
+  le16 last_modified_time; // BEWARE: little endian number
+  le16 last_modified_date; // BEWARE: little endian number
+  le16 start_cluster_low;  // only last two bytes
+  le32 file_size;
 } __attribute__((packed));
 
 #define FAT_DIR_ENTRY_BYTE_SIZE 32
@@ -63,39 +63,39 @@ struct fat_dir_entry_s {
 /* Wrapper around a FAT directory entry that contains members used to put it in
  * data structures, and to use it as a file handle */
 struct fat_file_s {
-    // The data from the actual FAT directory entry
-    fat_dir_entry dentry;
-    // Full name of the file (with extension)
-    char name[MAX_FILENAME];
-    // Full path to file.
-    char *filepath;
-    // Full start cluster
-    u32 start_cluster;
+  // The data from the actual FAT directory entry
+  fat_dir_entry dentry;
+  // Full name of the file (with extension)
+  char name[MAX_FILENAME];
+  // Full path to file.
+  char *filepath;
+  // Full start cluster
+  u32 start_cluster;
 
-    union {
-        // Valid only for directories
-        struct {
-            // Number of consecutive dir entries in disk (including ignored
-            // ones). It also marks the position of the first free space for a
-            // dir_entry.
-            u32 nentries;
-        } dir;
-        // Valid only for non-directory files
-        struct {
-            // Number of clusters that this file is supposed to be,
-            // based on the file_size given in the directory entry.
-            u32 num_clusters;
-        } file;
-    };
-    // Position in the parent directory entry table
-    u32 pos_in_parent;
-    // Pointer to the FAT table containing this file
-    fat_table table;
-    // Current number of open file descriptors to this file
-    u32 num_times_opened : 31;
-    // True iff the subdirectories of this file have been read into memory.
-    // Always 0 for non-directories.
-    u32 children_read : 1;
+  union {
+    // Valid only for directories
+    struct {
+      // Number of consecutive dir entries in disk (including ignored
+      // ones). It also marks the position of the first free space for a
+      // dir_entry.
+      u32 nentries;
+    } dir;
+    // Valid only for non-directory files
+    struct {
+      // Number of clusters that this file is supposed to be,
+      // based on the file_size given in the directory entry.
+      u32 num_clusters;
+    } file;
+  };
+  // Position in the parent directory entry table
+  u32 pos_in_parent;
+  // Pointer to the FAT table containing this file
+  fat_table table;
+  // Current number of open file descriptors to this file
+  u32 num_times_opened : 31;
+  // True iff the subdirectories of this file have been read into memory.
+  // Always 0 for non-directories.
+  u32 children_read : 1;
 };
 
 /**
@@ -128,7 +128,8 @@ fat_file fat_file_init(fat_table table, bool is_dir, char *filepath);
 /**
  * @brief Destroy a FAT file structure and free its memory
  *
- * Frees the filepath and dentry fields, and finally the fat_file_s structure itself.
+ * Frees the filepath and dentry fields, and finally the fat_file_s structure
+ * itself.
  *
  * @param file File to destroy
  */
@@ -214,7 +215,7 @@ void fat_utime(fat_file file, fat_file parent, const struct utimbuf *buf);
  * @retval void errno set to EIO if write operation fails
  */
 void fat_file_add_child_direntry(fat_file parent, fat_dir_entry child_dentry,
-                                  u32 pos_in_parent);
+                                 u32 pos_in_parent);
 
 /**
  * @brief Removes a child directory entry from a parent directory
@@ -227,16 +228,18 @@ void fat_file_add_child_direntry(fat_file parent, fat_dir_entry child_dentry,
  * @param pos_in_parent Position in parent directory of the entry
  */
 void fat_file_remove_child_direntry(fat_file parent, fat_dir_entry child_dentry,
-                                     u32 pos_in_parent);
+                                    u32 pos_in_parent);
 
 /**
  * @brief Read all children entries from a directory
  *
- * Creates fat_file instances from directory entries in the directory's data cluster.
- * This operation is not recursive - it does not read files in subdirectories.
+ * Creates fat_file instances from directory entries in the directory's data
+ * cluster. This operation is not recursive - it does not read files in
+ * subdirectories.
  *
  * @param dir Directory to read children from (must be a directory, not a file)
- * @return GList of newly created fat_file references, or NULL on error (errno set to EIO)
+ * @return GList of newly created fat_file references, or NULL on error (errno
+ * set to EIO)
  */
 GList *fat_file_read_children(fat_file dir);
 
@@ -286,7 +289,8 @@ void fat_file_truncate(fat_file file, off_t offset, fat_file parent);
  * @param size Number of bytes to write
  * @param offset Offset within file to start writing
  * @param parent Parent directory of the file
- * @return Number of bytes written on success, or negative error number on failure
+ * @return Number of bytes written on success, or negative error number on
+ * failure
  * @retval 0 errno set to EOVERFLOW if offset is greater than file size
  * @retval <0 errno set to EIO if read or write operations fail
  * @todo Fill with zeros the gap between file_size and offset
@@ -305,7 +309,8 @@ ssize_t fat_file_pwrite(fat_file file, const void *buf, size_t size,
  * @param size Number of bytes to write
  * @param offset Offset within file to start writing
  * @param parent Parent directory of the file
- * @return Number of bytes written on success, or negative error number on failure
+ * @return Number of bytes written on success, or negative error number on
+ * failure
  */
 ssize_t fat_file_pwrite_existing_clusters(fat_file file, const void *buf,
                                           size_t size, off_t offset,
@@ -321,4 +326,7 @@ ssize_t fat_file_pwrite_existing_clusters(fat_file file, const void *buf,
  * @param parent Parent directory of the file
  */
 void fat_file_unlink(fat_file file, fat_file parent);
+u32 file_start_cluster(fat_dir_entry disk_dentry);
+fat_dir_entry init_direntry_from_buff(fat_dir_entry buff);
+fat_file init_file_from_dentry(fat_dir_entry dentry, fat_file parent);
 #endif /* _FAT_FILE_H */

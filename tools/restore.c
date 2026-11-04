@@ -1,71 +1,69 @@
-#include <stdbool.h>
-#include <stdio.h>
 #include "../audit.h"
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <unistd.h>
 
-int main(int argc, char **argv){
-  if(argc > 4 || argc < 3){ //la peor validacion del mundo
-      printf("Uso: restore /ruta_de_archivo_a_recuperar ./mnt/ruta_de_guardado\n");
-      return 1;
-  }
+static void usage(const char *prog) {
+    fprintf(stderr, "Usage: %s MOUNTPOINT /path/of/deleted/file\n", prog);
+}
 
-  bool debug = false;
+/* Must match the errno mapping chosen on the filesystem side. */
+static const char *explain(int err) {
+    switch (err) {
+    case ENOENT:   return "no deletion record found for that file";
+    case EEXIST:   return "a file with that name already exists";
+    case EBUSY:    return "clusters were reused after the deletion, data was overwritten";
+    case ENOTDIR:  return "the parent directory no longer exists";
+    case EOVERFLOW:return "the deletion record is truncated, the file is not recoverable";
+    default:       return strerror(err);
+    }
+}
 
-  if(argc == 4){
-    debug = strcmp(argv[3], "d") == 0;
-  }
+int main(int argc, char *argv[]) {
+    char control_path[PATH_MAX];
+    const char *mountpoint, *target;
+    int fd, n;
+    ssize_t written;
 
-  char *filepath = "./mnt/.audit/events.bin";
-  char *path_to_restore = argv[1];
-  char *save_path = argv[2];
-  printf("%s\n", argv[3]);
-  printf("%d",debug);
+    if (argc != 3) {
+        usage(argv[0]);
+        return 2;
+    }
+    mountpoint = argv[1];
+    target = argv[2];
 
-  printf("%s\n",path_to_restore);
-  printf("%s\n",save_path);
+    if (target[0] != '/' || strlen(target) >= AUDIT_PATH_MAX) {
+        fprintf(stderr, "Error: path must be absolute and shorter than %d\n",
+                AUDIT_PATH_MAX);
+        return 2;
+    }
 
-  //Filtrar el events.bin con el path_to_restore
-    int fd;
-    audit_event_t event;
-    ssize_t bytes_read;
-    uint64_t event_count = 0;
+    n = snprintf(control_path, sizeof(control_path), "%s%s", mountpoint,
+                 AUDIT_RESTORE_PATH);
+    if (n < 0 || (size_t)n >= sizeof(control_path)) {
+        fprintf(stderr, "Error: mountpoint path too long\n");
+        return 2;
+    }
 
-    fd = open(filepath, O_RDONLY);
+    fd = open(control_path, O_WRONLY);
     if (fd < 0) {
-        fprintf(stderr, "Error: Cannot open file '%s': %s\n", filepath, strerror(errno));
+        fprintf(stderr, "Error: cannot open '%s': %s\n", control_path,
+                strerror(errno));
         return 1;
     }
 
-
-    while ((bytes_read = read(fd, &event, sizeof(audit_event_t))) == sizeof(audit_event_t)) {
-        if(debug == true){
-          printf("path pasado:%s\npath en el fs: %s\n",path_to_restore,event.filepath);
-          printf("evento del tipo:%d\n",event.operation_type);
-        }
-        if(strcmp(event.filepath, path_to_restore) == 0)
-          printf("coincide %s\n",event.filepath);
-        event_count++;
-    }
-
-
-    if (bytes_read < 0) {
-        fprintf(stderr, "Error reading file: %s\n", strerror(errno));
-        close(fd);
-        return 1;
-    } else if (bytes_read > 0) {
-        fprintf(stderr, "Warning: Incomplete event at end of file (%zd bytes)\n", bytes_read);
-    }
-
-    printf("\nTotal events: %lu\n", (unsigned long)event_count);
-
+    written = write(fd, target, strlen(target));
+    int saved_errno = errno; /* close() could change it */
     close(fd);
 
-
-  printf("restore ejecutado");
-  return 0;
+    if (written < 0) {
+        fprintf(stderr, "restore failed for '%s': %s\n", target,
+                explain(saved_errno));
+        return 1;
+    }
+    printf("restored %s\n", target);
+    return 0;
 }

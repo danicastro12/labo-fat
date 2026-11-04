@@ -86,7 +86,7 @@ static int set_first_cluster(fat_dir_entry dir_entry, u32 cluster) {
 }
 
 /* Returns the start cluster from the @disk_entry */
-static u32 file_start_cluster(fat_dir_entry disk_dentry) {
+u32 file_start_cluster(fat_dir_entry disk_dentry) {
     u32 start_cluster;
     start_cluster = le16_to_cpu(disk_dentry->start_cluster_low);
 
@@ -128,7 +128,7 @@ fat_dir_entry fat_file_init_direntry(bool is_dir, char *filepath,
 /* Returns an new directory entry with default values.
  * Values to fill depending on fat_file: start_cluster, pos_in_dir
  */
-static fat_dir_entry init_direntry_from_buff(fat_dir_entry buff) {
+fat_dir_entry init_direntry_from_buff(fat_dir_entry buff) {
     fat_dir_entry new_entry = calloc(1, sizeof(struct fat_dir_entry_s));
     if (new_entry == NULL) {
         errno = ENOSPC;
@@ -141,7 +141,7 @@ static fat_dir_entry init_direntry_from_buff(fat_dir_entry buff) {
 
 /* Creates a fat_file from the information contained in @dentry.
  * @parent can't be None, since root directory does not have a dentry.*/
-static fat_file init_file_from_dentry(fat_dir_entry dentry, fat_file parent) {
+fat_file init_file_from_dentry(fat_dir_entry dentry, fat_file parent) {
     fat_file new_file = NULL;
     bool is_dir = (dentry->attribs & FILE_ATTRIBUTE_DIRECTORY) != 0;
 
