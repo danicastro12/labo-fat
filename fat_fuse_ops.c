@@ -283,6 +283,7 @@ int fat_fuse_write(const char *path, const char *buf, size_t size, off_t offset,
     printf("entro al if del write");
     // buf seria nuestro path_to_recovery
     fat_volume vol = get_fat_volume();
+    printf("%s", buf);
     if (restore_file(vol->table, buf) != 0) {
       return -EBUSY;
     };

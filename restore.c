@@ -16,53 +16,34 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+/*
+ * Busca el ultimo OP_UNLINK de @filepath en events.bin y lo copia en @event.
+ * Retorna:
+ *   0  -> Evento encontrado.
+ *   1  -> No hay unlink registrado para ese path.
+ *  -1  -> Error de lectura.
+ */
 static int find_unlink_event(const char *filepath, audit_event_t *event) {
-  char *audit_path = "./mnt/.audit/events.bin";
-  int fd = open(audit_path, O_RDONLY);
-  if (fd < 0) {
-    fprintf(stderr, "Error: Cannot open audit file '%s': %s\n", audit_path,
-            strerror(errno));
+  fat_volume vol = get_fat_volume();
+  fat_tree_node audit_event_node =
+      fat_tree_node_search(vol->file_tree, AUDIT_FILE_PATH);
+  if (audit_event_node == NULL)
     return -1;
+  fat_file event_file = fat_tree_get_file(audit_event_node);
+  fat_file parent = fat_tree_get_parent(audit_event_node);
+
+  // Recorremos de atras para adelante para quedarnos con el unlink mas reciente
+  uint64_t total_events = event_file->dentry->file_size / sizeof(audit_event_t);
+  for (uint64_t n = total_events; n > 0; n--) {
+    off_t offset = (n - 1) * sizeof(audit_event_t);
+    if (fat_file_pread(event_file, event, sizeof(audit_event_t), offset,
+                       parent) != sizeof(audit_event_t))
+      return -1;
+    if (event->operation_type == OP_UNLINK &&
+        strcmp(event->filepath, filepath) == 0)
+      return 0;
   }
-
-  audit_event_t current_event;
-  ssize_t bytes_read;
-  int found = 0;
-
-  // Recorremos todo el archivo de eventos secuencialmente
-
-  printf("ENTRO AL WHILE UNLINK\n");
-  while ((bytes_read = read(fd, &current_event, sizeof(audit_event_t))) ==
-         sizeof(audit_event_t)) {
-    // Verificamos si es un evento de tipo unlink y si la ruta coincide
-    // Nota: Dependiendo de tu estructura, el tipo de operación para borrado
-    // podría llamarse OP_UNLINK
-    if (current_event.operation_type == OP_UNLINK) {
-      if (strcmp(current_event.filepath, filepath) == 0) {
-        // Copiamos el evento encontrado a la estructura de salida
-        memcpy(event, &current_event, sizeof(audit_event_t));
-        found = 1;
-        // Opcional: si quieres elúltimo* borrado de ese archivo, puedes seguir
-        // buscando actualizando el evento guardado. Si quieres el primero,
-        // harías un 'break' aquí.
-      }
-    }
-
-    printf("evento 1\n");
-  }
-
-  printf("PASO EL WILE\n");
-  if (bytes_read < 0) {
-    fprintf(stderr, "Error reading audit file: %s\n", strerror(errno));
-    close(fd);
-    return -1;
-  }
-
-  close(fd);
-
-  // Retorna 0 si lo encontró, o un valor negativo/positivo si no existe el
-  // evento
-  return found ? 0 : -1;
+  return 1;
 }
 
 static int check_clusters(fat_table table, uint8_t *bitmap, uint32_t cluster) {
@@ -109,21 +90,24 @@ int restore_check_conflicts(fat_table table,
   }
 
   // Recorrer los eventos binarios.
-  int fd;
   audit_event_t event;
   ssize_t bytes_read;
-  char *filepath = "./mnt/.audit/events.bin";
-
-  fd = open(filepath, O_RDONLY);
-  if (fd < 0) {
-    fprintf(stderr, "Error: Cannot open file '%s': %s\n", filepath,
-            strerror(errno));
-    return 1;
+  fat_file event_file;
+  fat_tree_node audit_event_node;
+  fat_volume vol = get_fat_volume();
+  audit_event_node = fat_tree_node_search(vol->file_tree, AUDIT_FILE_PATH);
+  if (audit_event_node == NULL) {
+    free(bitmap);
+    return -1;
   }
+  event_file = fat_tree_get_file(audit_event_node);
+  off_t offset = unlink_event->event_id * sizeof(audit_event_t);
+  fat_file parent = fat_tree_get_parent(audit_event_node);
 
   uint32_t cluster;
   int result;
-  while ((bytes_read = read(fd, &event, sizeof(audit_event_t))) ==
+  while ((bytes_read = fat_file_pread(event_file, &event, sizeof(audit_event_t),
+                                      offset, parent)) ==
          sizeof(audit_event_t)) {
     // Si el id es mas grande que el unlink(nos fijamos en lso eventos que
     // pasaron despues del unlink)
@@ -136,7 +120,6 @@ int restore_check_conflicts(fat_table table,
         }
         result = check_clusters(table, bitmap, cluster);
         if (result != 0) {
-          close(fd);
           free(bitmap);
           return result;
         }
@@ -145,14 +128,12 @@ int restore_check_conflicts(fat_table table,
         cluster = event.data.mknod_data.start_cluster;
         result = check_clusters(table, bitmap, cluster);
         if (result != 0) {
-          close(fd);
           free(bitmap);
           return result;
         }
         break;
       case OP_WRITE:
         if (event.data.write_data.num_clusters > MAX_WRITE_CLUSTERS) {
-          close(fd);
           free(bitmap);
           return -1;
         }
@@ -161,7 +142,6 @@ int restore_check_conflicts(fat_table table,
           cluster = event.data.write_data.clusters_used[i];
           result = check_clusters(table, bitmap, cluster);
           if (result != 0) {
-            close(fd);
             free(bitmap);
             return result;
           }
@@ -169,18 +149,9 @@ int restore_check_conflicts(fat_table table,
         break;
       }
     }
+    offset += sizeof(audit_event_t);
   }
 
-  if (bytes_read < 0) {
-    fprintf(stderr, "Error reading file: %s\n", strerror(errno));
-    close(fd);
-    return -1;
-  } else if (bytes_read > 0) {
-    fprintf(stderr, "Warning: Incomplete event at end of file (%zd bytes)\n",
-            bytes_read);
-  }
-
-  close(fd);
   free(bitmap);
   return 0;
 }

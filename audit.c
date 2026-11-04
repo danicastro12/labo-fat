@@ -212,19 +212,19 @@ void audit_log_unlink(const char *path, fat_file file) {
   audit_event_t event;
 
   event_init(&event, OP_UNLINK, path);
-
-  event.data.unlink_data.file_size = file->dentry->file_size;
-  // logica para la cluster_chain
-  u32 cur_cluster = file->start_cluster;
-  size_t i = 0;
-  while (cur_cluster != 0 && !fat_table_cluster_is_EOC(cur_cluster) &&
-         i < MAX_UNLINK_CLUSTERS) {
-    event.data.unlink_data.cluster_chain[i] = cur_cluster;
-    cur_cluster = fat_table_read_cluster_value(file->table, cur_cluster);
-    i++;
-  }
-
-  event_write(&event);
+    event.data.unlink_data.file_size = file->dentry->file_size;
+    //logica para la cluster_chain
+    u32 cur_cluster = file->start_cluster;
+    size_t i = 0;
+    while(cur_cluster != 0 && !fat_table_cluster_is_EOC(cur_cluster) && i < MAX_UNLINK_CLUSTERS){
+        event.data.unlink_data.cluster_chain[i] = cur_cluster;
+        cur_cluster = fat_table_read_cluster_value(file->table, cur_cluster);
+        i++;
+    }
+    event.data.unlink_data.num_clusters = i;
+    event.data.unlink_data.pos_in_parent = file->pos_in_parent;
+    event.data.unlink_data.first_char = file->dentry->base_name[0];
+    event_write(&event);
 }
 
 void audit_log_mknod(const char *path, fat_file file) {
