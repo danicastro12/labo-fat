@@ -10,9 +10,11 @@
 #include "fat_file.h"
 #include "fat_filename_util.h"
 #include "fat_fs_tree.h"
+#include "fat_types.h"
 #include "fat_util.h"
 #include "fat_volume.h"
 #include <alloca.h>
+#include <asm-generic/errno-base.h>
 #include <errno.h>
 #include <gmodule.h>
 #include <libgen.h>
@@ -21,6 +23,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include "restore.h"
 
 /* Loads directory children from the volume into in-memory tree.
  * Calls function fat_file_read_children which returns
@@ -281,6 +284,14 @@ int fat_fuse_write(const char *path, const char *buf, size_t size, off_t offset,
         return -EOVERFLOW;
     if (audit_is_protected_path(path))
         return -EPERM; //proteccion para no escribir en event.bin
+
+    if(is_restore_path(path)){
+     //buf seria nuestro path_to_recovery
+      fat_volume vol = get_fat_volume();
+      if(restore_file(vol->table, buf) != 0){
+         return -EBUSY;
+      };
+    }
 
     int result = fat_file_pwrite(file, buf, size, offset, parent);
 
