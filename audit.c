@@ -1,11 +1,11 @@
-#include "fat_file.h"
 #include "audit.h"
+#include "fat_file.h"
 #include "fat_fs_tree.h"
+#include "fat_fuse_ops.h"
+#include "fat_table.h"
 #include "fat_types.h"
 #include "fat_util.h"
 #include "fat_volume.h"
-#include "fat_fuse_ops.h"
-#include "fat_table.h"
 #include <alloca.h>
 #include <errno.h>
 #include <gmodule.h>
@@ -14,215 +14,233 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
-#include <unistd.h>
 #include <time.h>
-
+#include <unistd.h>
 
 static uint64_t total_events;
 static fat_tree_node audit_event_node;
 
-int fat_fuse_internal_mkdir(const char *path,fat_volume vol) {
-    errno = 0;
-    if(vol == NULL){
-      return -EINVAL;
-    }
-    fat_file parent = NULL, new_file = NULL;
-    fat_tree_node parent_node = NULL;
-
-    // The system has already checked the path does not exist. We get the parent
-    parent_node = fat_tree_node_search(vol->file_tree, dirname(strdup(path)));
-    if (parent_node == NULL) {
-        errno = ENOENT;
-        return -errno;
-    }
-    parent = fat_tree_get_file(parent_node);
-    if (!fat_file_is_directory(parent)) {
-        fat_error("Error! Parent is not directory\n");
-        errno = ENOTDIR;
-        return -errno;
-    }
-
-    // init child
-    new_file = fat_file_init(vol->table, true, strdup(path));
-    if (errno != 0) {
-        return -errno;
-    }
-    // insert to directory tree representation
-    vol->file_tree = fat_tree_insert(vol->file_tree, parent_node, new_file);
-    //printf("PRINT DESDE INTERNAL");
-    fat_tree_print_preorder(vol->file_tree);
-    // write file in parent's entry (disk)
-    new_file->pos_in_parent = parent->dir.nentries;
-    fat_file_add_child_direntry(parent, new_file->dentry, new_file->pos_in_parent);
-
-    return -errno;
-}
-
-int fat_fuse_event_file(fat_volume vol){
+int fat_fuse_internal_mkdir(const char *path, fat_volume vol) {
   errno = 0;
-  fat_file parent =NULL, new_file = NULL; 
+  if (vol == NULL) {
+    return -EINVAL;
+  }
+  fat_file parent = NULL, new_file = NULL;
   fat_tree_node parent_node = NULL;
 
-  parent_node = fat_tree_node_search(vol->file_tree, AUDIT_DIR_PATH);
-
-  //Chequeo si existe la carpeta padre /.audit
-  if(parent_node == NULL){
-    return -1;
+  // The system has already checked the path does not exist. We get the parent
+  parent_node = fat_tree_node_search(vol->file_tree, dirname(strdup(path)));
+  if (parent_node == NULL) {
+    errno = ENOENT;
+    return -errno;
   }
-
-  //Chequeo si /.audit es un directorio(carpeta)
   parent = fat_tree_get_file(parent_node);
-  if(!fat_file_is_directory(parent)){
+  if (!fat_file_is_directory(parent)) {
+    fat_error("Error! Parent is not directory\n");
+    errno = ENOTDIR;
+    return -errno;
+  }
+
+  // init child
+  new_file = fat_file_init(vol->table, true, strdup(path));
+  if (errno != 0) {
+    return -errno;
+  }
+  // insert to directory tree representation
+  vol->file_tree = fat_tree_insert(vol->file_tree, parent_node, new_file);
+  // printf("PRINT DESDE INTERNAL");
+  fat_tree_print_preorder(vol->file_tree);
+  // write file in parent's entry (disk)
+  new_file->pos_in_parent = parent->dir.nentries;
+  fat_file_add_child_direntry(parent, new_file->dentry,
+                              new_file->pos_in_parent);
+
+  return -errno;
+}
+
+int fat_fuse_event_file(fat_volume vol, const char *parent_path,
+                        const char *filepath) {
+  errno = 0;
+  fat_file parent = NULL, new_file = NULL;
+  fat_tree_node parent_node = NULL;
+
+  parent_node = fat_tree_node_search(vol->file_tree, parent_path);
+
+  // Chequeo si existe la carpeta padre /.audit
+  if (parent_node == NULL) {
     return -1;
   }
 
-  new_file = fat_file_init(vol->table,false, strdup(AUDIT_FILE_PATH));
+  // Chequeo si /.audit es un directorio(carpeta)
+  parent = fat_tree_get_file(parent_node);
+  if (!fat_file_is_directory(parent)) {
+    return -1;
+  }
+
+  new_file = fat_file_init(vol->table, false, strdup(filepath));
   if (errno != 0) {
     return -errno;
   }
 
-  vol->file_tree = fat_tree_insert(vol->file_tree, parent_node,new_file);
+  vol->file_tree = fat_tree_insert(vol->file_tree, parent_node, new_file);
   new_file->pos_in_parent = parent->dir.nentries;
-  fat_file_add_child_direntry(parent, new_file->dentry, new_file->pos_in_parent);
- 
+  fat_file_add_child_direntry(parent, new_file->dentry,
+                              new_file->pos_in_parent);
+
   return -errno;
 }
 
-bool audit_is_protected_path(const char *path){
-    return strcmp(AUDIT_DIR_PATH, path) == 0 || 
-           strcmp(AUDIT_FILE_PATH, path) == 0;
+bool audit_is_protected_path(const char *path) {
+  return strcmp(AUDIT_DIR_PATH, path) == 0 ||
+         strcmp(AUDIT_FILE_PATH, path) == 0;
 }
 
+int audit_init(fat_volume vol) {
+  errno = 0;
+  if (vol == NULL) {
+    return -EINVAL;
+  }
+  if (vol->mount_flags & FAT_MOUNT_FLAG_READONLY) {
+    return errno; // return sin hacer nada, no tiene permissos de escritura
+  }
 
-int audit_init(fat_volume vol){
-    errno = 0;
-    if (vol == NULL){
-        return -EINVAL;
-    }
-    if (vol->mount_flags & FAT_MOUNT_FLAG_READONLY){
-        return errno; //return sin hacer nada, no tiene permissos de escritura
-    }
+  // bool exist_dir = false;
+  // bool exist_file = false;
+  fat_tree_node audit_dir_node =
+      fat_tree_node_search(vol->file_tree, AUDIT_DIR_PATH);
 
-    //bool exist_dir = false;
-    //bool exist_file = false;
-    fat_tree_node audit_dir_node = fat_tree_node_search(vol->file_tree, AUDIT_DIR_PATH);
-
-    if(audit_dir_node == NULL){
-      int res_dir = fat_fuse_internal_mkdir(AUDIT_DIR_PATH, vol);
-      if(res_dir != 0){
-        return res_dir;
-      }
-      audit_dir_node = fat_tree_node_search(vol->file_tree, AUDIT_DIR_PATH);
+  if (audit_dir_node == NULL) {
+    int res_dir = fat_fuse_internal_mkdir(AUDIT_DIR_PATH, vol);
+    if (res_dir != 0) {
+      return res_dir;
     }
-    else {
-      fat_file audit_dir_file = fat_tree_get_file(audit_dir_node);
-      if (audit_dir_file->children_read != 1) {
-          fat_fuse_load_directory_children(vol, audit_dir_node);
-      }
+    audit_dir_node = fat_tree_node_search(vol->file_tree, AUDIT_DIR_PATH);
+  } else {
+    fat_file audit_dir_file = fat_tree_get_file(audit_dir_node);
+    if (audit_dir_file->children_read != 1) {
+      fat_fuse_load_directory_children(vol, audit_dir_node);
     }
+  }
 
+  audit_event_node = fat_tree_node_search(vol->file_tree, AUDIT_FILE_PATH);
+  if (audit_event_node == NULL) {
+    int res_file = fat_fuse_event_file(vol, AUDIT_DIR_PATH, AUDIT_FILE_PATH);
+    if (res_file != 0) {
+      return res_file;
+    }
     audit_event_node = fat_tree_node_search(vol->file_tree, AUDIT_FILE_PATH);
-    if(audit_event_node == NULL){
-      int res_file = fat_fuse_event_file(vol);
-      if(res_file != 0){
-        return res_file;
-      }
-      audit_event_node = fat_tree_node_search(vol->file_tree, AUDIT_FILE_PATH);
+  }
+
+  audit_event_node = fat_tree_node_search(vol->file_tree, AUDIT_FILE_PATH);
+  if (audit_event_node == NULL) {
+    int res_file = fat_fuse_event_file(vol, AUDIT_DIR_PATH, "/.restore");
+    if (res_file != 0) {
+      return res_file;
     }
+    audit_event_node = fat_tree_node_search(vol->file_tree, AUDIT_FILE_PATH);
+  }
+  // calculo de la cantidad de eventos en events.bin
+  fat_file event_file = fat_tree_get_file(audit_event_node);
+  total_events = event_file->dentry->file_size / sizeof(audit_event_t);
 
-    //calculo de la cantidad de eventos en events.bin
-    fat_file event_file = fat_tree_get_file(audit_event_node);
-    total_events = event_file->dentry->file_size / sizeof(audit_event_t);
-
-    return 0;
+  return 0;
 }
 
-static void event_init(audit_event_t *event, operation_type_t op_type,const char* path){
-  if(event == NULL){
+static void event_init(audit_event_t *event, operation_type_t op_type,
+                       const char *path) {
+  if (event == NULL) {
     return;
   }
-  memset(event, 0, sizeof(*event)); //para evitar tener basura, ver si va a ser problema o no
+  memset(
+      event, 0,
+      sizeof(
+          *event)); // para evitar tener basura, ver si va a ser problema o no
   event->event_id = total_events;
   event->timestamp = time(NULL);
   event->operation_type = op_type;
-  strncpy(event->username,"NaN", sizeof(event->username) - 1);
+  strncpy(event->username, "NaN", sizeof(event->username) - 1);
   strncpy(event->filepath, path, sizeof(event->filepath) - 1);
 }
 
-static void event_write(audit_event_t *event){
+static void event_write(audit_event_t *event) {
   fat_file event_file = fat_tree_get_file(audit_event_node);
   fat_file parent = fat_tree_get_parent(audit_event_node);
   off_t event_off = event_file->dentry->file_size;
   size_t event_size = sizeof(*event);
 
-  int result = fat_file_pwrite(event_file, event, event_size, event_off, parent);
+  int result =
+      fat_file_pwrite(event_file, event, event_size, event_off, parent);
   if (result == sizeof(*event))
-      total_events++;
+    total_events++;
 }
 
-void audit_log_write(const char *path, fat_file file, size_t size, off_t offset){
-    if (audit_event_node == NULL) //checkeo si es read_only
-        return;
-    audit_event_t event;
+void audit_log_write(const char *path, fat_file file, size_t size,
+                     off_t offset) {
+  if (audit_event_node == NULL) // checkeo si es read_only
+    return;
+  audit_event_t event;
 
-    event_init(&event, OP_WRITE, path);
+  event_init(&event, OP_WRITE, path);
 
+  event.data.write_data.offset = offset; // ver si hace falta casteo
+  event.data.write_data.size = size;
+  // logica para los clusters
+  size_t userfile_bpc = fat_table_bytes_per_cluster(file->table);
+  size_t first = offset / userfile_bpc;
+  size_t last = (offset + size - 1) / userfile_bpc;
+  size_t qtd = last - first + 1;
+  if (qtd > MAX_WRITE_CLUSTERS)
+    qtd = MAX_WRITE_CLUSTERS;
 
-    event.data.write_data.offset = offset; //ver si hace falta casteo
-    event.data.write_data.size = size;
-    //logica para los clusters
-    size_t userfile_bpc = fat_table_bytes_per_cluster(file->table);
-    size_t first = offset / userfile_bpc;
-    size_t last = (offset + size - 1) / userfile_bpc;
-    size_t qtd = last - first + 1;
-    if(qtd > MAX_WRITE_CLUSTERS) qtd = MAX_WRITE_CLUSTERS;
+  u32 cur_cluster =
+      fat_table_seek_cluster(file->table, file->start_cluster, offset);
+  size_t i = 0;
+  while (i < qtd && !fat_table_cluster_is_EOC(cur_cluster)) {
+    event.data.write_data.clusters_used[i] = cur_cluster;
+    cur_cluster = fat_table_read_cluster_value(file->table, cur_cluster);
+    i++;
+  }
+  event.data.write_data.num_clusters = i;
 
-    u32 cur_cluster = fat_table_seek_cluster(file->table, file->start_cluster, offset);
-    size_t i = 0;
-    while(i < qtd && !fat_table_cluster_is_EOC(cur_cluster)){
-        event.data.write_data.clusters_used[i] = cur_cluster;
-        cur_cluster = fat_table_read_cluster_value(file->table, cur_cluster);
-        i++;
-    }
-    event.data.write_data.num_clusters = i;
-
-    event_write(&event);
+  event_write(&event);
 }
 
-void audit_log_unlink(const char *path, fat_file file){
-    if (audit_event_node == NULL) //checkeo si es read_only
-        return;
-    audit_event_t event;
+void audit_log_unlink(const char *path, fat_file file) {
+  if (audit_event_node == NULL) // checkeo si es read_only
+    return;
+  audit_event_t event;
 
-    event_init(&event, OP_UNLINK, path);
+  event_init(&event, OP_UNLINK, path);
 
-    event.data.unlink_data.file_size = file->dentry->file_size;
-    //logica para la cluster_chain
-    u32 cur_cluster = file->start_cluster;
-    size_t i = 0;
-    while(cur_cluster != 0 && !fat_table_cluster_is_EOC(cur_cluster) && i < MAX_UNLINK_CLUSTERS){
-        event.data.unlink_data.cluster_chain[i] = cur_cluster;
-        cur_cluster = fat_table_read_cluster_value(file->table, cur_cluster);
-        i++;
-    }
+  event.data.unlink_data.file_size = file->dentry->file_size;
+  // logica para la cluster_chain
+  u32 cur_cluster = file->start_cluster;
+  size_t i = 0;
+  while (cur_cluster != 0 && !fat_table_cluster_is_EOC(cur_cluster) &&
+         i < MAX_UNLINK_CLUSTERS) {
+    event.data.unlink_data.cluster_chain[i] = cur_cluster;
+    cur_cluster = fat_table_read_cluster_value(file->table, cur_cluster);
+    i++;
+  }
 
-    event_write(&event);
+  event_write(&event);
 }
 
-void audit_log_mknod(const char *path, fat_file file){
-    if (audit_event_node == NULL) //checkeo si es read_only
-        return;
-    audit_event_t event;
-    event_init(&event, OP_MKNOD, path);
-    event.data.mknod_data.start_cluster = file->start_cluster;
-    event_write(&event);
+void audit_log_mknod(const char *path, fat_file file) {
+  if (audit_event_node == NULL) // checkeo si es read_only
+    return;
+  audit_event_t event;
+  event_init(&event, OP_MKNOD, path);
+  event.data.mknod_data.start_cluster = file->start_cluster;
+  event_write(&event);
 }
 
-void audit_log_dir(const char* path,operation_type_t op_type, fat_file dir_file){
+void audit_log_dir(const char *path, operation_type_t op_type,
+                   fat_file dir_file) {
   audit_event_t event;
   event_init(&event, op_type, path);
-  if(op_type != OP_RMDIR && op_type!=OP_MKDIR){
-    return ;
+  if (op_type != OP_RMDIR && op_type != OP_MKDIR) {
+    return;
   }
 
   event.data.dir_data.dir_cluster = dir_file->start_cluster;

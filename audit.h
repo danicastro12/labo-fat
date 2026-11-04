@@ -77,7 +77,8 @@ typedef struct __attribute__((packed)) {
 
 int fat_fuse_internal_mkdir(const char *path,
                             fat_volume vol); // no deveriamos dejarlas privadas?
-int fat_fuse_event_file(fat_volume vol);
+int fat_fuse_event_file(fat_volume vol, const char *parent_path,
+                        const char *filepath);
 
 bool audit_is_protected_path(const char *path);
 
