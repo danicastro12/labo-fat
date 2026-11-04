@@ -205,7 +205,9 @@ void audit_log_unlink(const char *path, fat_file file){
         cur_cluster = fat_table_read_cluster_value(file->table, cur_cluster);
         i++;
     }
-
+    event.data.unlink_data.num_clusters = i;
+    event.data.unlink_data.pos_in_parent = file->pos_in_parent;
+    event.data.unlink_data.first_char = file->dentry->base_name[0];
     event_write(&event);
 }
 
