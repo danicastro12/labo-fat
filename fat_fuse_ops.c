@@ -278,17 +278,27 @@ int fat_fuse_write(const char *path, const char *buf, size_t size, off_t offset,
     return -EOVERFLOW;
   if (audit_is_protected_path(path))
     return -EPERM; // proteccion para no escribir en event.bin
-
   if (is_restore_path(path)) {
-    printf("entro al if del write");
-    // buf seria nuestro path_to_recovery
-    fat_volume vol = get_fat_volume();
-    printf("%s", buf);
-    if (restore_file(vol->table, buf) != 0) {
-      return -EBUSY;
-    };
-  }
 
+    char target[256]; // 256
+    size_t len = size;
+
+    // sacar '\n', '\r', espacios y '\0' del final
+    while (len > 0 && (buf[len - 1] == '\n' || buf[len - 1] == '\r' ||
+                       buf[len - 1] == ' ' || buf[len - 1] == '\0'))
+      len--;
+
+    if (len == 0 || buf[0] != '/') // tiene que ser un path absoluto
+      return -EINVAL;
+    if (len >= sizeof(target)) // no entra en filepath[256] del evento
+      return -ENAMETOOLONG;
+
+    memcpy(target, buf, len);
+    target[len] = '\0';
+
+    int res = restore_file(get_fat_volume()->table, target); // 0 o -errno
+    return res == 0 ? (int)size : res; // return acá, no sigas al pwrite
+  }
   int result = fat_file_pwrite(file, buf, size, offset, parent);
 
   // log
@@ -585,7 +595,8 @@ int fat_fuse_rename(const char *oldpath, const char *newpath) {
   free(file->filepath);
   file->filepath = strdup(newpath);
 
-  // viii) Add the entry to the new parent directory (or same if just renaming)
+  // viii) Add the entry to the new parent directory (or same if just
+  // renaming)
   file->pos_in_parent = new_parent_file->dir.nentries;
   fat_file_add_child_direntry(new_parent_file, file->dentry,
                               file->pos_in_parent);

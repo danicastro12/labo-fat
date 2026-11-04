@@ -670,12 +670,13 @@ ssize_t fat_file_pwrite_existing_clusters(fat_file file, const void *buf,
 
 /* ####################### */
 void fat_file_unlink(fat_file file, fat_file parent) {
-    u32 new_start_cluster = 0, next_cluster = 0;
+   /* u32 new_start_cluster = 0, next_cluster = 0;
     off_t cluster_offset = 0;
     int error;
-    new_start_cluster = file->start_cluster;
+    new_start_cluster = file->start_cluster;*/
 
     // Mark following clusters as not used
+  /*
     while (!fat_table_cluster_is_EOC(new_start_cluster)) {
         // Mark begining of this cluster as '\0' to avoid trash when creating
         // new directories
@@ -695,7 +696,7 @@ void fat_file_unlink(fat_file file, fat_file parent) {
         }
         new_start_cluster = next_cluster;
     }
-
+  */
     // Update entry in directory
     fat_file_remove_child_direntry(parent, file->dentry, file->pos_in_parent);
 }

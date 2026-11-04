@@ -104,7 +104,8 @@ int audit_init(fat_volume vol) {
   if (vol->mount_flags & FAT_MOUNT_FLAG_READONLY) {
     return errno; // return sin hacer nada, no tiene permissos de escritura
   }
-
+  fat_tree_node audit_restore_node =
+      fat_tree_node_search(vol->file_tree, RESTORE_PATH);
   // bool exist_dir = false;
   // bool exist_file = false;
   fat_tree_node audit_dir_node =
@@ -132,13 +133,12 @@ int audit_init(fat_volume vol) {
     audit_event_node = fat_tree_node_search(vol->file_tree, AUDIT_FILE_PATH);
   }
 
-  audit_event_node = fat_tree_node_search(vol->file_tree, RESTORE_PATH);
-  if (audit_event_node == NULL) {
+  audit_restore_node = fat_tree_node_search(vol->file_tree, RESTORE_PATH);
+  if (audit_restore_node == NULL) {
     int res_file = fat_fuse_event_file(vol, AUDIT_DIR_PATH, RESTORE_PATH);
     if (res_file != 0) {
       return res_file;
     }
-    audit_event_node = fat_tree_node_search(vol->file_tree, RESTORE_PATH);
   }
   // calculo de la cantidad de eventos en events.bin
   fat_file event_file = fat_tree_get_file(audit_event_node);
@@ -212,19 +212,20 @@ void audit_log_unlink(const char *path, fat_file file) {
   audit_event_t event;
 
   event_init(&event, OP_UNLINK, path);
-    event.data.unlink_data.file_size = file->dentry->file_size;
-    //logica para la cluster_chain
-    u32 cur_cluster = file->start_cluster;
-    size_t i = 0;
-    while(cur_cluster != 0 && !fat_table_cluster_is_EOC(cur_cluster) && i < MAX_UNLINK_CLUSTERS){
-        event.data.unlink_data.cluster_chain[i] = cur_cluster;
-        cur_cluster = fat_table_read_cluster_value(file->table, cur_cluster);
-        i++;
-    }
-    event.data.unlink_data.num_clusters = i;
-    event.data.unlink_data.pos_in_parent = file->pos_in_parent;
-    event.data.unlink_data.first_char = file->dentry->base_name[0];
-    event_write(&event);
+  event.data.unlink_data.file_size = file->dentry->file_size;
+  // logica para la cluster_chain
+  u32 cur_cluster = file->start_cluster;
+  size_t i = 0;
+  while (cur_cluster != 0 && !fat_table_cluster_is_EOC(cur_cluster) &&
+         i < MAX_UNLINK_CLUSTERS) {
+    event.data.unlink_data.cluster_chain[i] = cur_cluster;
+    cur_cluster = fat_table_read_cluster_value(file->table, cur_cluster);
+    i++;
+  }
+  event.data.unlink_data.num_clusters = i;
+  event.data.unlink_data.pos_in_parent = file->pos_in_parent;
+  event.data.unlink_data.first_char = file->dentry->base_name[0];
+  event_write(&event);
 }
 
 void audit_log_mknod(const char *path, fat_file file) {
