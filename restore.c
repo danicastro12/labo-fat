@@ -282,3 +282,11 @@ int restore_file(fat_table table, const char *filepath) {
   }
   return 0;
 }
+
+int restore_path_control(const char *path, const char *file_to_recovery){
+    if (strcmp(RESTORE_PATH, path) == 0){
+        fat_volume vol = get_fat_volume();
+        return restore_file(vol->table, file_to_recovery);
+    }
+    return -1; //error no era el path
+}
