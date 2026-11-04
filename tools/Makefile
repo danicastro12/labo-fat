@@ -9,6 +9,9 @@ all: audit_reader restore
 audit_reader: audit_reader.c
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $<
 
+restore: restore.c
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $<
+
 clean:
 	rm -f audit_reader restore
 
