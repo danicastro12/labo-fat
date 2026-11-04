@@ -137,6 +137,9 @@ static int read_dos_3_31_bpb(fat_volume vol,
     vol->sectors_per_track = le16_to_cpu(boot_sec->sectors_per_track);
     vol->num_heads = le16_to_cpu(boot_sec->num_heads);
     vol->hidden_sectors = le32_to_cpu(boot_sec->hidden_sectors);
+    // En FAT32 el campo de 16 bits vale 0 y el total real esta aca
+    if (vol->total_sectors == 0)
+        vol->total_sectors = le32_to_cpu(boot_sec->total_sectors_32);
 
     return 0;
 }
@@ -233,6 +236,7 @@ static int read_boot_sector(fat_volume vol, int fd) {
         return ret;
 
     num_data_sectors = vol->total_sectors - vol->reserved_sectors -
+                       vol->num_tables * vol->sectors_per_fat -
                        ((vol->max_root_entries << 5) >> vol->sector_order);
     vol->table->num_data_clusters =
         num_data_sectors >> vol->sectors_per_cluster_order;
@@ -306,9 +310,9 @@ fat_volume fat_volume_mount(const char *volume, int mount_flags) {
 
     vol = calloc(1, sizeof(struct fat_volume_s));
     vol->table = calloc(1, sizeof(struct fat_table_s));
-    if (!vol)
-        return vol;
-
+    if (!vol->table)
+        return NULL;
+    vol->table->recoverable = g_hash_table_new(g_direct_hash, g_direct_equal);
     if (mount_flags & FAT_MOUNT_FLAG_READWRITE) {
         open_flags = O_RDWR;
     } else {
@@ -364,6 +368,7 @@ int fat_volume_unmount(fat_volume vol) {
     munmap(vol->table->fat_map,
            (size_t)vol->sectors_per_fat << vol->sector_order);
     fat_tree_destroy(vol->file_tree);
+    g_hash_table_destroy(vol->table->recoverable);
     free(vol);
     return ret;
 }

@@ -57,6 +57,7 @@ typedef struct __attribute__((packed)) {
       uint32_t pos_in_parent;
       uint8_t first_char;
       uint8_t num_clusters;
+      uint8_t first_bytes[MAX_UNLINK_CLUSTERS];
     } unlink_data;
 
     /* Data for OP_MKDIR/OP_RMDIR */
@@ -72,8 +73,10 @@ typedef struct __attribute__((packed)) {
 
   /* Padding to ensure fixed size of 512 bytes total
    * Adjust this value based on your structure size */
-  uint8_t _padding[92];
+  uint8_t _padding[76];
 } audit_event_t;
+
+_Static_assert(sizeof(audit_event_t) == 512, "audit_event_t debe medir 512");
 
 int fat_fuse_internal_mkdir(const char *path,
                             fat_volume vol); // no deveriamos dejarlas privadas?

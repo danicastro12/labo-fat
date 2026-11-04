@@ -46,6 +46,9 @@ static int find_unlink_event(const char *filepath, audit_event_t *event) {
   return 1;
 }
 
+// Version con bitmap + escaneo de events.bin, reemplazada por
+// restore_check_recoverable. Cambiar 0 por 1 para volver a usarla.
+#if 0
 static int check_clusters(fat_table table, uint8_t *bitmap, uint32_t cluster) {
   if (!fat_table_is_valid_cluster_number(table, cluster)) {
     return -1;
@@ -155,6 +158,38 @@ int restore_check_conflicts(fat_table table,
   free(bitmap);
   return 0;
 }
+#endif
+
+/*
+ * Retorna:
+ *   0  -> Todos los clusters siguen intactos.
+ *   1  -> Algun cluster fue reutilizado despues del unlink.
+ *  -1  -> Evento invalido.
+ */
+int restore_check_recoverable(fat_table table,
+                              const audit_event_t *unlink_event) {
+  uint32_t num_clusters = unlink_event->data.unlink_data.num_clusters;
+  if (num_clusters == 0 || num_clusters > MAX_UNLINK_CLUSTERS)
+    return -1;
+
+  for (uint32_t i = 0; i < num_clusters; i++) {
+    uint32_t cluster = unlink_event->data.unlink_data.cluster_chain[i];
+    gpointer value = NULL;
+
+    if (!fat_table_is_valid_cluster_number(table, cluster))
+      return -1;
+    // No esta en la tabla: se asigno a otro archivo despues del unlink
+    if (!g_hash_table_lookup_extended(table->recoverable,
+                                      GUINT_TO_POINTER(cluster), NULL, &value))
+      return 1;
+    // Lo libero otro unlink: tiene datos de otro archivo
+    if (GPOINTER_TO_SIZE(value) != unlink_event->event_id + 1)
+      return 1;
+    if (fat_table_is_cluster_used(table, cluster))
+      return 1;
+  }
+  return 0;
+}
 
 /*
  * Retorna:
@@ -164,17 +199,6 @@ int restore_check_conflicts(fat_table table,
  */
 int restore_fat_table(fat_table table, uint32_t *cluster_chain,
                       uint8_t num_clusters, audit_event_t unlink_event) {
-  // me fijo si hay clusters de los que queremos recuperar que ya estan usados
-  int result = restore_check_conflicts(table, &unlink_event);
-
-  if (result == 1) {
-    printf("El archivo no se puede restaurar, clusters pisados");
-    return 1;
-  } else if (result == -1) {
-    printf("Hubo un error al restaurar el archivo");
-    return -1;
-  }
-
   // reconstruyo la cadena de clusters
   for (int i = 0; i < num_clusters - 1; i++) {
     if (fat_table_set_next_cluster(table, cluster_chain[i],
@@ -189,6 +213,13 @@ int restore_fat_table(fat_table table, uint32_t *cluster_chain,
                                  FAT_CLUSTER_END_OF_CHAIN_MIN) != 0) {
     return -1;
   };
+
+  // devuelvo el primer byte de cada cluster que piso fat_file_unlink
+  for (int i = 0; i < num_clusters; i++) {
+    if (full_pwrite(table->fd, &unlink_event.data.unlink_data.first_bytes[i], 1,
+                    fat_table_cluster_offset(table, cluster_chain[i])) != 1)
+      return -1;
+  }
 
   return 0;
 }
@@ -257,46 +288,52 @@ int restore_entries(fat_volume vol, const audit_event_t *event) {
   return 0;
 }
 
+/*
+ * Retorna 0 si se restauro, o un -errno:
+ *   -EEXIST -> Ya existe un archivo con ese path.
+ *   -ENOENT -> No hay unlink registrado para ese path.
+ *   -EBUSY  -> Algun cluster fue reutilizado, no se puede restaurar.
+ *   -EINVAL -> El evento del unlink es invalido.
+ *   -EIO    -> Error de lectura/escritura.
+ */
 int restore_file(fat_table table, const char *filepath) {
   audit_event_t unlink_event;
+  fat_volume vol = get_fat_volume();
+
+  if (fat_tree_node_search(vol->file_tree, filepath) != NULL) {
+    DEBUG("restore: '%s' ya existe", filepath);
+    return -EEXIST;
+  }
 
   int result = find_unlink_event(filepath, &unlink_event);
-  uint32_t cluster_chain[MAX_UNLINK_CLUSTERS];
+  if (result != 0) {
+    DEBUG("restore: no se encontro unlink de '%s'", filepath);
+    return result == 1 ? -ENOENT : -EIO;
+  }
 
+  // Comprobar que los clusters no hayan sido sobrescritos.
+  result = restore_check_recoverable(table, &unlink_event);
+  if (result != 0) {
+    DEBUG("restore: clusters de '%s' reutilizados o evento invalido", filepath);
+    return result == 1 ? -EBUSY : -EINVAL;
+  }
+
+  uint32_t cluster_chain[MAX_UNLINK_CLUSTERS];
   memcpy(cluster_chain, unlink_event.data.unlink_data.cluster_chain,
          sizeof(cluster_chain));
-
-  if (result != 0) {
-    printf("\n error en el restore_file 1 if \nNO ENCUENTRA UNLINK\n");
-    return result;
-  }
-
-  printf("PASO EL FIND");
-  // Comprobar que los clusters no hayan sido sobrescritos.
-  result = restore_check_conflicts(table, &unlink_event);
-
-  printf("PASO EL CHECK");
-  if (result != 0) {
-    printf("\nerror en el restore_file 2 if\n");
-    return result;
-  }
 
   // Reconstruir la cadena FAT.
   result = restore_fat_table(table, cluster_chain,
                              unlink_event.data.unlink_data.num_clusters,
                              unlink_event);
-
   if (result != 0) {
-    printf("\nerror en el restore_file 3 if\n");
-    return result;
+    DEBUG("restore: error reconstruyendo la FAT de '%s'", filepath);
+    return -EIO;
   }
 
-  // ACA SIGUE LA RESTAURACION DE LAS DENTRIES
-  fat_volume vol = get_fat_volume();
-  int res_entries = restore_entries(vol, &unlink_event);
-  if (res_entries != 0) {
-    printf("Ocurrio un error a restaurar las dentries\n");
-    return res_entries;
+  if (restore_entries(vol, &unlink_event) != 0) {
+    DEBUG("restore: error restaurando la dentry de '%s'", filepath);
+    return -EIO;
   }
   return 0;
 }
@@ -304,3 +341,5 @@ int restore_file(fat_table table, const char *filepath) {
 bool is_restore_path(const char *path) {
   return strcmp(RESTORE_PATH, path) == 0;
 }
+
+

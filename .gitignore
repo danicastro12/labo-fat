@@ -26,3 +26,7 @@ resources/fatfs.img
 
 #objetcs
 *.o
+
+#./tools make restore
+tools/restore
+tools/restore.dSYM/

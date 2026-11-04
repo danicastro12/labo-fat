@@ -280,13 +280,23 @@ int fat_fuse_write(const char *path, const char *buf, size_t size, off_t offset,
     return -EPERM; // proteccion para no escribir en event.bin
 
   if (is_restore_path(path)) {
-    printf("entro al if del write");
-    // buf seria nuestro path_to_recovery
-    fat_volume vol = get_fat_volume();
-    printf("%s", buf);
-    if (restore_file(vol->table, buf) != 0) {
-      return -EBUSY;
-    };
+    // buf no termina en '\0' y trae el '\n' del echo. Con >> macOS reenvia
+    // todo lo escrito antes, asi que el path a recuperar es la ultima linea
+    size_t end = size;
+    while (end > 0 && buf[end - 1] == '\n')
+      end--;
+    size_t start = end;
+    while (start > 0 && buf[start - 1] != '\n')
+      start--;
+
+    char restore_path[256];
+    size_t len = min(end - start, sizeof(restore_path) - 1);
+    memcpy(restore_path, buf + start, len);
+    restore_path[len] = '\0';
+
+    // No se escribe en el archivo restore: solo dispara la restauracion
+    int res = restore_file(get_fat_volume()->table, restore_path);
+    return res == 0 ? (int)size : res;
   }
 
   int result = fat_file_pwrite(file, buf, size, offset, parent);
@@ -357,6 +367,15 @@ int fat_fuse_mknod(const char *path, mode_t mode, dev_t dev) {
   fat_volume vol;
   fat_file parent, new_file;
   fat_tree_node parent_node;
+
+#ifdef __APPLE__
+  // macOS crea ._* (AppleDouble) y .DS_Store para guardar xattrs, y le roban
+  // los clusters liberados a los archivos que se quieren restaurar
+  const char *name = strrchr(path, '/');
+  name = name ? name + 1 : path;
+  if (strncmp(name, "._", 2) == 0 || strcmp(name, ".DS_Store") == 0)
+    return -EACCES;
+#endif
 
   // The system has already checked the path does not exist. We get the parent
   vol = get_fat_volume();
@@ -434,8 +453,8 @@ int fat_fuse_truncate(const char *path, off_t offset) {
 /* Removes a file. */
 int fat_fuse_unlink(const char *path) {
   errno = 0;
-  // proteccion para no deletar .audit o events.bin
-  if (audit_is_protected_path(path))
+  // proteccion para no deletar .audit, events.bin o restore
+  if (audit_is_protected_path(path) || is_restore_path(path))
     return -EPERM;
 
   fat_volume vol = get_fat_volume();
@@ -504,7 +523,8 @@ int fat_fuse_rmdir(const char *path) {
 int fat_fuse_rename(const char *oldpath, const char *newpath) {
   errno = 0;
   // proteccion para no deletar .audit o events.bin
-  if (audit_is_protected_path(oldpath) || audit_is_protected_path(newpath))
+  if (audit_is_protected_path(oldpath) || audit_is_protected_path(newpath) ||
+      is_restore_path(oldpath) || is_restore_path(newpath))
     return -EPERM;
   fat_volume vol = get_fat_volume();
   fat_file file = NULL;

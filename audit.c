@@ -17,6 +17,7 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+#include <glib.h>
 
 static uint64_t total_events;
 static fat_tree_node audit_event_node;
@@ -132,13 +133,13 @@ int audit_init(fat_volume vol) {
     audit_event_node = fat_tree_node_search(vol->file_tree, AUDIT_FILE_PATH);
   }
 
-  audit_event_node = fat_tree_node_search(vol->file_tree, RESTORE_PATH);
-  if (audit_event_node == NULL) {
+  // Nodo aparte: audit_event_node tiene que seguir apuntando a events.bin
+  fat_tree_node restore_node = fat_tree_node_search(vol->file_tree, RESTORE_PATH);
+  if (restore_node == NULL) {
     int res_file = fat_fuse_event_file(vol, AUDIT_DIR_PATH, RESTORE_PATH);
     if (res_file != 0) {
       return res_file;
     }
-    audit_event_node = fat_tree_node_search(vol->file_tree, RESTORE_PATH);
   }
   // calculo de la cantidad de eventos en events.bin
   fat_file event_file = fat_tree_get_file(audit_event_node);
@@ -218,6 +219,12 @@ void audit_log_unlink(const char *path, fat_file file) {
     size_t i = 0;
     while(cur_cluster != 0 && !fat_table_cluster_is_EOC(cur_cluster) && i < MAX_UNLINK_CLUSTERS){
         event.data.unlink_data.cluster_chain[i] = cur_cluster;
+        // fat_file_unlink pisa el primer byte de cada cluster con '\0'
+        full_pread(file->table->fd, &event.data.unlink_data.first_bytes[i], 1,
+                   fat_table_cluster_offset(file->table, cur_cluster));
+        // +1 para que el event_id 0 no se confunda con "no esta"
+        g_hash_table_insert(file->table->recoverable, GUINT_TO_POINTER(cur_cluster),
+                            GSIZE_TO_POINTER(event.event_id + 1));
         cur_cluster = fat_table_read_cluster_value(file->table, cur_cluster);
         i++;
     }

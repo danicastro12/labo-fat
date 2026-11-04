@@ -80,6 +80,12 @@ int fat_table_set_next_cluster(fat_table table, u32 cur_cluster,
     le32 next_cluster_le32 = cpu_to_le32(next_cluster);
     /* Write the disk fat table */
     off_t entry_offset = (off_t)(cur_cluster * 4) + table->fat_offset;
+
+    // Si un cluster libre pasa a usarse, ya no se puede recuperar
+    if (!fat_table_is_cluster_used(table, cur_cluster) &&
+        next_cluster != FAT_CLUSTER_FREE)
+        g_hash_table_remove(table->recoverable, GUINT_TO_POINTER(cur_cluster));
+
     ssize_t written_bytes =
         pwrite(table->fd, &next_cluster_le32, sizeof(le32), entry_offset);
     if (written_bytes <= 0) {

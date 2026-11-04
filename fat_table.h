@@ -10,6 +10,7 @@
 #include "fat_types.h"
 #include "fat_util.h"
 #include <sys/types.h>
+#include <glib.h> 
 
 // Both values of EOC are valid in FAT32 systems
 #define FAT_CLUSTER_END_OF_CHAIN_MIN 0x0FFFFFF8
@@ -32,6 +33,7 @@ struct fat_table_s {
     // Open file descriptor to the volume file or device
     int fd;
     u16 cluster_order;
+    GHashTable *recoverable;
 };
 
 /**
