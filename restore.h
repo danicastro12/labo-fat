@@ -1,7 +1,7 @@
 #include "audit.h"
 #include "fat_types.h"
 
-#define RESTORE_PATH "/.audit/.restore"
+#define RESTORE_PATH "/.audit/restore"
 
 int restore_fat_table(fat_table table, uint32_t *cluster_chain,
                       uint8_t num_clusters, audit_event_t unlink_event);

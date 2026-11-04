@@ -6,6 +6,7 @@
 #include "fat_types.h"
 #include "fat_util.h"
 #include "fat_volume.h"
+#include "restore.h"
 #include <alloca.h>
 #include <errno.h>
 #include <gmodule.h>
@@ -131,13 +132,13 @@ int audit_init(fat_volume vol) {
     audit_event_node = fat_tree_node_search(vol->file_tree, AUDIT_FILE_PATH);
   }
 
-  audit_event_node = fat_tree_node_search(vol->file_tree, AUDIT_FILE_PATH);
+  audit_event_node = fat_tree_node_search(vol->file_tree, RESTORE_PATH);
   if (audit_event_node == NULL) {
-    int res_file = fat_fuse_event_file(vol, AUDIT_DIR_PATH, "/.restore");
+    int res_file = fat_fuse_event_file(vol, AUDIT_DIR_PATH, RESTORE_PATH);
     if (res_file != 0) {
       return res_file;
     }
-    audit_event_node = fat_tree_node_search(vol->file_tree, AUDIT_FILE_PATH);
+    audit_event_node = fat_tree_node_search(vol->file_tree, RESTORE_PATH);
   }
   // calculo de la cantidad de eventos en events.bin
   fat_file event_file = fat_tree_get_file(audit_event_node);
