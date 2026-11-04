@@ -22,6 +22,7 @@ file.img
 #./tools make audit_reader
 tools/audit_reader
 tools/audit_reader.dSYM/
+resources/fatfs.img
 
 #objetcs
 *.o
