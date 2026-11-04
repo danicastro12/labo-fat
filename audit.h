@@ -54,6 +54,8 @@ typedef struct __attribute__((packed)) {
         struct {
             uint32_t cluster_chain[MAX_UNLINK_CLUSTERS];
             uint32_t file_size;
+            uint32_t pos_in_parent;
+            uint8_t firs_char;
         } unlink_data;
 
         /* Data for OP_MKDIR/OP_RMDIR */
@@ -69,7 +71,7 @@ typedef struct __attribute__((packed)) {
 
     /* Padding to ensure fixed size of 512 bytes total
      * Adjust this value based on your structure size */
-    uint8_t _padding[100];
+    uint8_t _padding[95];
 } audit_event_t;
 
 
