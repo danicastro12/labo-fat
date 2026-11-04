@@ -280,6 +280,7 @@ int fat_fuse_write(const char *path, const char *buf, size_t size, off_t offset,
     return -EPERM; // proteccion para no escribir en event.bin
 
   if (is_restore_path(path)) {
+    printf("entro al if del write");
     // buf seria nuestro path_to_recovery
     fat_volume vol = get_fat_volume();
     if (restore_file(vol->table, buf) != 0) {

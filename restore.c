@@ -17,7 +17,52 @@
 #include <unistd.h>
 
 static int find_unlink_event(const char *filepath, audit_event_t *event) {
-  return 1;
+  char *audit_path = "./mnt/.audit/events.bin";
+  int fd = open(audit_path, O_RDONLY);
+  if (fd < 0) {
+    fprintf(stderr, "Error: Cannot open audit file '%s': %s\n", audit_path,
+            strerror(errno));
+    return -1;
+  }
+
+  audit_event_t current_event;
+  ssize_t bytes_read;
+  int found = 0;
+
+  // Recorremos todo el archivo de eventos secuencialmente
+
+  printf("ENTRO AL WHILE UNLINK\n");
+  while ((bytes_read = read(fd, &current_event, sizeof(audit_event_t))) ==
+         sizeof(audit_event_t)) {
+    // Verificamos si es un evento de tipo unlink y si la ruta coincide
+    // Nota: Dependiendo de tu estructura, el tipo de operación para borrado
+    // podría llamarse OP_UNLINK
+    if (current_event.operation_type == OP_UNLINK) {
+      if (strcmp(current_event.filepath, filepath) == 0) {
+        // Copiamos el evento encontrado a la estructura de salida
+        memcpy(event, &current_event, sizeof(audit_event_t));
+        found = 1;
+        // Opcional: si quieres elúltimo* borrado de ese archivo, puedes seguir
+        // buscando actualizando el evento guardado. Si quieres el primero,
+        // harías un 'break' aquí.
+      }
+    }
+
+    printf("evento 1\n");
+  }
+
+  printf("PASO EL WILE\n");
+  if (bytes_read < 0) {
+    fprintf(stderr, "Error reading audit file: %s\n", strerror(errno));
+    close(fd);
+    return -1;
+  }
+
+  close(fd);
+
+  // Retorna 0 si lo encontró, o un valor negativo/positivo si no existe el
+  // evento
+  return found ? 0 : -1;
 }
 
 static int check_clusters(fat_table table, uint8_t *bitmap, uint32_t cluster) {
@@ -40,7 +85,6 @@ static int check_clusters(fat_table table, uint8_t *bitmap, uint32_t cluster) {
 int restore_check_conflicts(fat_table table,
                             const audit_event_t *unlink_event) {
   uint32_t total_clusters = table->num_data_clusters + 2;
-
   // Bitmap: una posición por cluster.
   uint8_t *bitmap = calloc(total_clusters, sizeof(uint8_t));
 
@@ -252,13 +296,15 @@ int restore_file(fat_table table, const char *filepath) {
          sizeof(cluster_chain));
 
   if (result != 0) {
-    printf("\n error en el restore_file 1 if \n");
+    printf("\n error en el restore_file 1 if \nNO ENCUENTRA UNLINK\n");
     return result;
   }
 
+  printf("PASO EL FIND");
   // Comprobar que los clusters no hayan sido sobrescritos.
   result = restore_check_conflicts(table, &unlink_event);
 
+  printf("PASO EL CHECK");
   if (result != 0) {
     printf("\nerror en el restore_file 2 if\n");
     return result;

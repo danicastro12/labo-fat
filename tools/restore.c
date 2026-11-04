@@ -28,7 +28,7 @@ int main(int argc, char *argv[]) {
   int fd;
   ssize_t written;
 
-  fd = open("./mnt/.audit/.restore", O_WRONLY);
+  fd = open("./mnt/.audit/restore", O_WRONLY);
   if (fd < 0) {
     fprintf(stderr, "Error: cannot open '%s': %s\n", control_path,
             strerror(errno));
